@@ -1,0 +1,23 @@
+Author: Arijit Sarcar
+
+Pre-requisite Packages: Please ensure that the following packages are already
+installed (# packages are optional):
+- cmake
+# - ccache
+# - distcc & export DISTCC_DISABLE=1 
+# - libboost-all-dev
+- libgoogle-glog-dev (for google logging - google flags installed as depended package)
+- libgoogle-perftools-dev (for thread malloc and profiling heap & cpu)
+# - emacs23 (editor) & load google-c-style.el
+# libprotobuf-dev
+
+Build the file cache library and the test cases
+> cd $TOP_DIR/file_cache/build/debug
+> cmake VERBOSE=1 ../.. -DCMAKE_BUILD_TYPE=Debug
+> make
+> make test
+> cd $TOP_DIR
+
+Run the test case
+> cd $TOP_DIR/file_cache/bin
+> ./bin/file_cache_test_d --log_dir="./test_ip_op/" --gtest_output="xml:./test_ip_op/test_output.xml"
