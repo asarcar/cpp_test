@@ -78,6 +78,8 @@ namespace asarcar {
 // unsigned.  Google code therefore doesn't need a "uchar" type.
 // TODO(csilvers): how do we make sure unsigned-char works on non-gcc systems?
 typedef signed char         schar;
+// int8_, int16_t, int32_t, int64_t, and intptr_ is available in cinttypes header
+typedef int int128 __attribute__((mode(TI)));   
 
 // Arijit Sarcar: C++11 defined all [un]signed integer types int<8..64>_t and intptr_t
 // in <cstdint>. e.g. intptr_t, intmax_t, ...

@@ -30,9 +30,9 @@
 // Google Headers
 #include <glog/logging.h>   
 // Local Headers
-#include "base_utils/basictypes.h"
-#include "base_utils/fassert.h"
-#include "base_utils/init.h"
+#include "utils/basic/basictypes.h"
+#include "utils/basic/fassert.h"
+#include "utils/basic/init.h"
 
 template <typename T>
 class SyncMsgQ {
