@@ -85,9 +85,16 @@ typedef int int128 __attribute__((mode(TI)));
 // in <cstdint>. e.g. intptr_t, intmax_t, ...
 // C++11 also defined [un]signed integers min & max values in <cstdint>
 // e.g. INT16_MIN, INTPTR_MAX, INTMAX_MAX, and UINT64_MAX
-
 // NOTE: unsigned types are DANGEROUS in loops and other arithmetical
-// places.  Use the signed types unless your variable represents a bit
+// places. Reasons are:
+// 1. C/C++ provide implicit type conversions between signed and unsigned values. 
+// 2. If you mix signed and unsigned operands in an arithmetic operation, 
+//    the signed operand is always converted to unsigned. 
+// 3. In arithmetic expressions, operands whose type is smaller than (unsigned) int 
+//    gets promoted to (unsigned) int. 
+// 4. It is very easy to underflow the minimum value of an unsigned int (i.e. zero).
+
+// Use the signed types unless your variable represents a bit
 // pattern (eg a hash value) or you really need the extra bit.  Do NOT
 // use 'unsigned' to express "this value should always be positive";
 // use assertions for this.
@@ -96,11 +103,12 @@ typedef int int128 __attribute__((mode(TI)));
 // We just do something that works on many systems, and hope for the best
 
 // Arijit Sarcar: C++11 defined format constants for std::fprintf family of functions
-// and format constants for the std::fscanf family of function in in <cinttypes>. 
+// and format constants for the std::fscanf family of function in <cinttypes>. 
 // e.g. PRIX64, SCNx64, ...
 
 // Arijit Sarcar: C++11 replaces DISALLOW_EVIL_CONSTRUCTORS by "delete" keyword
 // Arijit Sarcar: C++11 replaces COMPILE_ASSERT by "static_assert"
+
 #define arraysize(a)  (sizeof(a) / sizeof(*(a)))
 
 #define OFFSETOF_MEMBER(strct, field)                                   \
