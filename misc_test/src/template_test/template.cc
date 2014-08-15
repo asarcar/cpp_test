@@ -24,19 +24,23 @@
 #include "template.h"
 
 template <typename X>
-Elem<X>::Elem(void): val_{} {}
+Elem<X>::Elem(void): val_{kDefaultValue} {}
 
 template <typename X>
-Elem<X>::Elem(const X& val): val_{val}{}
+Elem<X>::Elem(const X& val): val_{val} {}
 
 template <typename X>
-const X& Elem<X>::Get(void) { return val_; }
+const X& Elem<X>::Get(void) const { return val_; }
 
 template <typename X>
-void Elem<X>::Dump(void) {std::cout << "Elem: value=" << val_ << std::endl;}
+void Elem<X>::Dump(void) const {std::cout << "Elem: value=" << val_ << std::endl;}
 
 // Trigger instantiation of Elem<Class>
 template class Elem<int>;
 template class Elem<double>;
+
+// Definition of constexpr required if you need this referenced from another
+// translation unit (e.g. template_test.cc
+constexpr float Element::kDefaultValue;
 
 

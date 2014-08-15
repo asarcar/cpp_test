@@ -33,14 +33,17 @@ DECLARE_bool(auto_test);
 int main(int argc, char *argv[]) {
   asarcar::Init::InitEnv(&argc, &argv);
 
-  Elem<int> e1{10};
+  Elem<int> e1;
   Elem<double> e2{3.3};
+  Element e3;
 
-  CHECK_EQ(e1.Get(), 10);
+  CHECK_EQ(e1.Get(), Elem<int>::kDefaultValue);
   CHECK_EQ(e2.Get(), 3.3);
+  CHECK_EQ(e3.Get(), Element::kDefaultValue);
 
   e1.Dump();
   e2.Dump();
+  e3.Dump();
 
   return 0;
 }

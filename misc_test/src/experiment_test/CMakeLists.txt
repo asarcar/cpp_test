@@ -14,3 +14,4 @@
 
 # Author: Arijit Sarcar <sarcar_a@yahoo.com>
 add_test_fn(elide)
+add_test_fn(exp_diff)

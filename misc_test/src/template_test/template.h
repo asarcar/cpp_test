@@ -32,13 +32,33 @@ class Elem {
  public:
   explicit Elem(void);
   explicit Elem(const X&);
-  const X& Get(void);
-  void Dump(void);
+  const X& Get(void) const;
+  void Dump(void) const;
+  constexpr static X kDefaultValue{10};
  private:
   X val_;
 };
 
+
+// Defining an "ordinary" (non-template) class to test whether
+// constexpr static ... requires explicit definition outside the class
+// if it is referenced elsewhere.
+// Note this external definition is not needed in case of templates
+// presumably because the "instantiation (elaboration) process" 
+// of the template takes care of allocating space that needs referencing.
+class Element {
+ public:
+  explicit Element(void): val_{kDefaultValue} {}
+  explicit Element(const float& val): val_{val} {}
+  const float& Get(void) const {return val_;}
+  void Dump(void) const {std::cout << "Element: value=" << val_ << std::endl;}
+  constexpr static float kDefaultValue{1000.0};
+ private:
+  float val_;
+};
+
 // Suppress implicit instantation of Elem
 extern template class Elem<int>;
+extern template class Elem<double>;
 
 #endif // _TEMPLATE_H_
