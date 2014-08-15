@@ -14,4 +14,5 @@
 
 # Author: Arijit Sarcar <sarcar_a@yahoo.com>
 add_test_fn(elide)
-add_test_fn(exp_diff)
+add_test_fn(ptr_diff)
+add_test_fn(template_overload)
