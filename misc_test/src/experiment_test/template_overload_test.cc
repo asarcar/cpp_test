@@ -21,7 +21,6 @@
 #include <array>            // std::array
 #include <iostream>         // std::cout
 // C Standard Headers
-#include <cassert>          // assert
 // Google Headers
 #include <gflags/gflags.h>  // Parse command line args and flags
 #include <glog/logging.h>   // Daemon Log function

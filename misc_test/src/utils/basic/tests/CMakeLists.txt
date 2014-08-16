@@ -16,5 +16,6 @@
 add_ctest_fn(fassert)
 add_ctest_fn(meta)
 add_ctest_fn(siz)
+add_ctest_fn(udu)
 
 

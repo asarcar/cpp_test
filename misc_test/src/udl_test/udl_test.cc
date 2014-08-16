@@ -25,6 +25,7 @@
 #include "utils/basic/basictypes.h"
 #include "utils/basic/fassert.h"
 #include "utils/basic/init.h"
+#include "utils/basic/meta.h"
 
 namespace asarcar {
 //-----------------------------------------------------------------------------
@@ -36,12 +37,12 @@ using DimTypeD = long double;
 using ComplexD = std::complex<DimTypeD>;
 
 constexpr ComplexD operator"" _r(DimTypeD realval) {
-  static_assert(std::is_pod<DimTypeD>::value, "DimTypeD should be a POD");
+  static_assert(IsPod<DimTypeD>(), "DimTypeD should be a POD");
   return ComplexD{realval, 0};
 }
 
 constexpr ComplexD operator"" _i(DimTypeD imgval) {
-  static_assert(std::is_pod<DimTypeD>::value, "DimTypeD should be a POD");
+  static_assert(IsPod<DimTypeD>(), "DimTypeD should be a POD");
   return ComplexD{0, imgval};
 }
 
@@ -49,12 +50,12 @@ using DimTypeZ = unsigned long long;
 using ComplexZ = std::complex<DimTypeZ>;
 
 constexpr ComplexZ operator"" _r(DimTypeZ realval) {
-  static_assert(std::is_pod<DimTypeZ>::value, "DimTypeZ should be a POD");
+  static_assert(IsPod<DimTypeZ>(), "DimTypeZ should be a POD");
   return ComplexZ{realval, 0};
 }
 
 constexpr ComplexZ operator"" _i(DimTypeZ imgval) {
-  static_assert(std::is_pod<DimTypeZ>::value, "DimTypeZ should be a POD");
+  static_assert(IsPod<DimTypeZ>(), "DimTypeZ should be a POD");
   return ComplexZ{0, imgval};
 }
 
@@ -65,18 +66,23 @@ constexpr ComplexZ operator"" _i(DimTypeZ imgval) {
 using namespace asarcar;
 using namespace std;
 
+// Flag Declarations
+DECLARE_bool(auto_test);
+
 int main(int argc, char *argv[]) {
   Init::InitEnv(&argc, &argv);
   
-  std::string str = "Hello"_s + " World!"_s;
-  std::cout << str << std::endl;
+  string str = "Hello"_s + " World!"_s;
+  LOG(INFO) << "String: " << str;
 
   ComplexD c = 3.0_r + 4.0_i;
-  std::cout << "3.0_r + 4.0_i = " << c << std::endl;
+  LOG(INFO) << "complex<double>: 3.0_r + 4.0_i = " << c;
 
   ComplexZ d = 6_r + 8_i;
-  std::cout << "6_r + 8_i = " << d << std::endl;
+  LOG(INFO) << "complex<integer>: 6_r + 8_i = " << d;
 
   return 0;
 }
 
+DEFINE_bool(auto_test, false, 
+            "test run programmatically (when true) or manually (when false)");
