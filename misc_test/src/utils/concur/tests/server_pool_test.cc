@@ -37,6 +37,8 @@
 #include "utils/concur/server_thread_pool.h"
 
 using namespace asarcar;
+using namespace asarcar::utils;
+using namespace asarcar::utils::concur;
 using namespace std;
 
 // Declarations

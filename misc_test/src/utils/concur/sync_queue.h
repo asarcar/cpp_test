@@ -13,8 +13,8 @@
 // limitations under the License.
 //
 
-#ifndef _SYNC_QUEUE_H_
-#define _SYNC_QUEUE_H_
+#ifndef _UTILS_CONCUR_SYNC_QUEUE_H_
+#define _UTILS_CONCUR_SYNC_QUEUE_H_
 
 //! @file   sync_queue.h
 //! @brief  SyncQ: Supports workQ with multiple producers and consumers
@@ -29,7 +29,7 @@
 //! @addtogroup utils
 //! @{
 
-namespace asarcar {
+namespace asarcar { namespace utils { namespace concur {
 //-----------------------------------------------------------------------------
 
 //! @class    SyncQ
@@ -70,6 +70,6 @@ class SyncMsgQ {
 };    
 
 //-----------------------------------------------------------------------------
-} // namespace asarcar
+} } } // namespace asarcar { namespace utils { namespace concur {
 
-#endif // _SYNC_QUEUE_H_
+#endif // _UTILS_CONCUR_SYNC_QUEUE_H_

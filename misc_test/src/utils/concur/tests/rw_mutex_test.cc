@@ -30,6 +30,8 @@
 #include "utils/concur/rw_lock_guard.h"
 
 using namespace asarcar;
+using namespace asarcar::utils;
+using namespace asarcar::utils::concur;
 using namespace std;
 
 // Declarations

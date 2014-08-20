@@ -13,38 +13,32 @@
 // limitations under the License.
 //
 
-//! @file   init.h
-//! @brief  Interface: init environment, enable logging, parse flags, etc.
-//! @author Arijit Sarcar <sarcar_a@yahoo.com>
+//! @file     meta.h
+//! @brief    Utilities to assist in meta programming. Taken liberally
+//            from Bjarne Stroustrup. Many wrappers will be available 
+//            by default from C++14
 
-#ifndef _UTILS_BASIC_INIT_H_
-#define _UTILS_BASIC_INIT_H_
+//! @author   Arijit Sarcar <sarcar_a@yahoo.com>
+
+#ifndef _UTILS_MATH_MATRIX_H_
+#define _UTILS_MATH_MATRIX_H_
 
 // C++ Standard Headers
-#include <iostream>         // std::cout
+#include <iostream>
 // C Standard Headers
 // Google Headers
+#include <glog/logging.h>   // Daemon Log function
 // Local Headers
+#include "utils/basic/basictypes.h"
 
 //! @addtogroup utils
 //! @{
 
-namespace asarcar {
+//! Namespace used for all math utility routines developed
+namespace asarcar { namespace utils { namespace math {
 //-----------------------------------------------------------------------------
 
-//! @class    Init
-//! @brief    Init basic services: logging, int handling, option parsing, ...
-class Init {
- public:
-  Init() = delete;
-  static void InitEnv(int *argc_p, char **argv_p[]);
- protected:
- private:
-};
-
 //-----------------------------------------------------------------------------
-} // namespace asarcar
+} } } // namespace asarcar { namespace utils { namespace math {
 
-#endif // _UTILS_BASIC_INIT_H_
-
-
+#endif // _UTILS_MATH_MATRIX_H_

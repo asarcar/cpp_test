@@ -18,8 +18,8 @@
 //            terminate, or throw exception clauses
 //! @author   Arijit Sarcar <sarcar_a@yahoo.com>
 
-#ifndef _BASE_UTILS_FASSERT_H_
-#define _BASE_UTILS_FASSERT_H_
+#ifndef _UTILS_BASIC_FASSERT_H_
+#define _UTILS_BASIC_FASSERT_H_
 
 // Class FAssert: Implements ideas professed by Bjarne Stroustrup
 // DESCRIPTION: 
@@ -133,4 +133,4 @@ inline void FAssert::dynamic_assert<false, FAssert::Error>
 //-----------------------------------------------------------------------------
 } // namespace asarcar
 
-#endif // _BASE_UTILS_FASSERT_H_
+#endif // _UTILS_BASIC_FASSERT_H_

@@ -17,8 +17,8 @@
 //! @brief  ServerThreadPool: Pool of threads executing function objects
 //! @author Arijit Sarcar <sarcar_a@yahoo.com>
 
-#ifndef _SERVER_THREAD_POOL_H_
-#define _SERVER_THREAD_POOL_H_
+#ifndef _UTILS_CONCUR_SERVER_THREAD_POOL_H_
+#define _UTILS_CONCUR_SERVER_THREAD_POOL_H_
 
 // C++ Standard Headers
 #include <iostream>         // std::cout
@@ -37,7 +37,7 @@
 //! @addtogroup utils
 //! @{
 
-namespace asarcar {
+namespace asarcar { namespace utils { namespace concur {
 //-----------------------------------------------------------------------------
 
 //! @class    ServerThreadPool
@@ -109,6 +109,6 @@ ServerThreadPool<F>::ServerThreadPool(uint32_t num_threads) {
 }
 
 //-----------------------------------------------------------------------------
-} // namespace asarcar
+} } } // namespace asarcar { namespace utils { namespace concur {
 
-#endif // _SERVER_THREAD_POOL_H_
+#endif // _UTILS_CONCUR_SERVER_THREAD_POOL_H_

@@ -13,7 +13,10 @@
 # limitations under the License.
 
 # Author: Arijit Sarcar <sarcar_a@yahoo.com>
-add_ctest_fn(fassert)
-add_ctest_fn(siz)
 
-
+######################################
+#           SubDirectories           #
+######################################
+if (CMAKE_CUSTOM_UNIT_TESTS)
+  add_subdirectory(tests)
+endif (CMAKE_CUSTOM_UNIT_TESTS)

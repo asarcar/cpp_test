@@ -17,8 +17,8 @@
 //! @brief    User Defined Literals for common types
 //! @author   Arijit Sarcar <sarcar_a@yahoo.com>
 
-#ifndef _BASE_UTILS_UDU_H_
-#define _BASE_UTILS_UDU_H_
+#ifndef _UTILS_MISC_UDU_H_
+#define _UTILS_MISC_UDU_H_
 
 // C++ Standard Headers
 #include <iostream>
@@ -32,7 +32,7 @@
 //! @addtogroup utils
 //! @{
 
-namespace asarcar {
+namespace asarcar { namespace utils { namespace misc {
 //-----------------------------------------------------------------------------
 
 // Credit: Concept, Implementation, etc. Verbatim: Bjarne Stroustrup
@@ -43,16 +43,27 @@ namespace asarcar {
 // template <int M, int K, int S> enum Unit... results in error
 template <int M, int K, int S>
 struct Unit {
-  constexpr static bool value = true;
   enum Dim {m=M, kg=K, s=S};
+  /**
+   * Kludge: We should declare a template struct is_unit that
+   * defines value as false and then specialize is_unit that 
+   * is true when Unit is passed. 
+   * Have not yet figured out how to do so on Unit that is 
+   * itself templatized.
+   */
+  constexpr static bool value = true; 
 };
 
-template <typename U>
-constexpr bool IsUnitType(void) {return U::value;}
+template <typename U> 
+constexpr bool IsUnitType(void) {
+  return U::value;
+}
 
 //! @brief Unit created by multiplying two Quantities
 template <typename U1, typename U2>
-using UnitPlus=Unit<(U1::Dim::m+U2::Dim::m), (U1::Dim::kg+U2::Dim::kg), (U1::Dim::s+U2::Dim::s)>;
+using UnitPlus=Unit<(U1::Dim::m+U2::Dim::m), 
+                    (U1::Dim::kg+U2::Dim::kg), 
+                    (U1::Dim::s+U2::Dim::s)>;
 
 //! @brief Unit created by dividing two Quantities
 template <typename U1, typename U2>
@@ -137,6 +148,7 @@ std::ostream& operator<<(std::ostream& os, const Quantity<U> &q) {
 }
 
 //-----------------------------------------------------------------------------
-} // namespace asarcar
+} } } // namespace asarcar { namespace utils { namespace misc {
 
-#endif // _BASE_UTILS_UDU_H_
+
+#endif // _UTILS_MISC_UDU_H_

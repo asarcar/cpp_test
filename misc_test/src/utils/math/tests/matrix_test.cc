@@ -15,7 +15,6 @@
 // Author: Arijit Sarcar <sarcar_a@yahoo.com>
 
 // Standard C++ Headers
-#include <exception>   // std::throw
 #include <iostream>
 // Standard C Headers
 // Google Headers
@@ -24,9 +23,11 @@
 #include "utils/basic/basictypes.h"
 #include "utils/basic/fassert.h"
 #include "utils/basic/init.h"
-#include "utils/basic/user_defined_units.h"
+#include "utils/math/matrix.h"
 
 using namespace asarcar;
+using namespace asarcar::utils;
+using namespace asarcar::utils::math;
 using namespace std;
 
 // Flag Declarations
@@ -35,28 +36,9 @@ DECLARE_bool(auto_test);
 int main(int argc, char **argv) {
   Init::InitEnv(&argc, &argv);
   
-  auto distance     = 8.0_m;
-  auto mass         = 2.0_kg;
-  auto time         = 2.0_s;
-  auto speed        = distance/time;
-  auto acceleration = speed/time;
-  auto force        = mass*acceleration;
-  auto energy       = force*distance;
-  CHECK_EQ(speed,        Quantity<MpS>{4.0});
-  CHECK_EQ(acceleration, Quantity<Acc>{2.0});
-  CHECK_EQ(force,        Quantity<F>{4.0});
-  CHECK_EQ(energy,       Quantity<E>{32.0});
-
-  LOG(INFO) << "Distance:     " << distance      << endl
-            << "Mass:         " << mass          << endl
-            << "Time:         " << time          << endl
-            << "Speed:        " << speed         << endl
-            << "Acceleration: " << acceleration  << endl
-            << "Force:        " << force         << endl
-            << "Energy:       " << energy;
-
   return 0;
 }
 
 DEFINE_bool(auto_test, false, 
             "test run programmatically (when true) or manually (when false)");
+

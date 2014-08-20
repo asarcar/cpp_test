@@ -20,8 +20,8 @@
 
 //! @author   Arijit Sarcar <sarcar_a@yahoo.com>
 
-#ifndef _BASE_UTILS_META_H_
-#define _BASE_UTILS_META_H_
+#ifndef _UTILS_MISC_META_H_
+#define _UTILS_MISC_META_H_
 
 // C++ Standard Headers
 #include <iostream>
@@ -37,8 +37,8 @@
 //! @addtogroup utils
 //! @{
 
-//! Generic namespace used for all utility routines developed
-namespace asarcar {
+//! Namespace used for all miscellaneous utility routines
+namespace asarcar { namespace utils { namespace misc {
 //-----------------------------------------------------------------------------
 
 //! @brief conditional wrapper
@@ -74,7 +74,7 @@ template <typename T>
 constexpr bool IsRValueReference(void) { return std::is_rvalue_reference<T>::value; }
 
 //-----------------------------------------------------------------------------
-} // namespace asarcar
+} } } // namespace asarcar { namespace utils { namespace misc {
 
-#endif // _BASE_UTILS_META_H_
+#endif // _UTILS_MISC_META_H_
 

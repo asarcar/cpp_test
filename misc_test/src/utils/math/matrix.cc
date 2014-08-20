@@ -13,38 +13,18 @@
 // limitations under the License.
 //
 
-//! @file   init.h
-//! @brief  Interface: init environment, enable logging, parse flags, etc.
+//! @file   init.cc
+//! @brief  Implementation: init environment, enable logging, parse flags, etc.
 //! @author Arijit Sarcar <sarcar_a@yahoo.com>
-
-#ifndef _UTILS_BASIC_INIT_H_
-#define _UTILS_BASIC_INIT_H_
 
 // C++ Standard Headers
 #include <iostream>         // std::cout
 // C Standard Headers
 // Google Headers
+#include <glog/logging.h>   // Daemon Log function
 // Local Headers
+#include "utils/basic/basictypes.h"
 
-//! @addtogroup utils
-//! @{
+namespace asarcar { namespace utils { namespace math {
 
-namespace asarcar {
-//-----------------------------------------------------------------------------
-
-//! @class    Init
-//! @brief    Init basic services: logging, int handling, option parsing, ...
-class Init {
- public:
-  Init() = delete;
-  static void InitEnv(int *argc_p, char **argv_p[]);
- protected:
- private:
-};
-
-//-----------------------------------------------------------------------------
-} // namespace asarcar
-
-#endif // _UTILS_BASIC_INIT_H_
-
-
+} } } // namespace asarcar { namespace utils { namespace math {

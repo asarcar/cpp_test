@@ -20,13 +20,13 @@
 // C++ Standard Headers
 #include <iostream>         // std::cout
 // C Standard Headers
-#include <cassert>          // assert
 // Google Headers
 #include <gflags/gflags.h>  // Parse command line args and flags
 #include <glog/logging.h>   // Daemon Log function
 // Local Headers
 #include "utils/basic/basictypes.h"
 #include "utils/basic/init.h"
+#include "utils/basic/fassert.h"
 
 DECLARE_bool(logtostderr);
 DECLARE_string(log_dir);
@@ -43,8 +43,8 @@ std::string getenvstr(const char* str)
 }
 
 void Init::InitEnv(int *argc_p, char **argv_p[]) {
-  assert(argc_p != nullptr);
-  assert(argv_p != nullptr);
+  FASSERT(argc_p != nullptr);
+  FASSERT(argv_p != nullptr);
 
   google::ParseCommandLineFlags(argc_p, argv_p, true);
   if (FLAGS_log_dir.empty()) {
@@ -73,6 +73,6 @@ void Init::InitEnv(int *argc_p, char **argv_p[]) {
   return;
 }
 
-} // namespace hexgame
+} // namespace asarcar
 
 

@@ -31,7 +31,7 @@
 #include "utils/basic/fassert.h"
 #include "utils/concur/rw_mutex.h"
 
-namespace asarcar {
+namespace asarcar { namespace utils { namespace concur {
 //-----------------------------------------------------------------------------
 void rw_mutex::lock(RwMode mode) {
   FASSERT(mode != RwMode::EMPTY);
@@ -122,4 +122,5 @@ std::ostream& operator<<(std::ostream& os, const rw_mutex& rwm) {
 }
 
 //-----------------------------------------------------------------------------
-} // namespace asarcar
+} } } // namespace asarcar { namespace utils { namespace concur {
+

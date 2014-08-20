@@ -13,7 +13,13 @@
 # limitations under the License.
 
 # Author: Arijit Sarcar <sarcar_a@yahoo.com>
-add_ctest_fn(fassert)
-add_ctest_fn(siz)
 
+add_library(math_utils matrix.cc)
+target_link_libraries(math_utils basic_utils)
 
+######################################
+#           SubDirectories           #
+######################################
+if (CMAKE_CUSTOM_UNIT_TESTS)
+  add_subdirectory(tests)
+endif (CMAKE_CUSTOM_UNIT_TESTS)

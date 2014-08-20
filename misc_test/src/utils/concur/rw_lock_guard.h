@@ -13,8 +13,8 @@
 // limitations under the License.
 //
 
-#ifndef _RW_LOCK_GUARD_H_
-#define _RW_LOCK_GUARD_H_
+#ifndef _UTILS_CONCUR_RW_LOCK_GUARD_H_
+#define _UTILS_CONCUR_RW_LOCK_GUARD_H_
 
 //! @file   rw_lock_guard.h
 //! @brief  rw_lock_guard: RAII for rw_lock
@@ -32,7 +32,8 @@
 //! @addtogroup utils
 //! @{
 
-namespace asarcar {
+//! Namespace used for all concurrency utility routines
+namespace asarcar { namespace utils { namespace concur {
 //-----------------------------------------------------------------------------
 
 //! @class    rw_lock_guard
@@ -58,6 +59,6 @@ class rw_lock_guard {
 };    
 
 //-----------------------------------------------------------------------------
-} // namespace asarcar
+} } } // namespace asarcar { namespace utils { namespace concur {
 
-#endif // _RW_LOCK_GUARD_H_
+#endif // _UTILS_CONCUR_RW_LOCK_GUARD_H_

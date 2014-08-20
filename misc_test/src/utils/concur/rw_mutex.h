@@ -13,8 +13,8 @@
 // limitations under the License.
 //
 
-#ifndef _RW_MUTEX_H_
-#define _RW_MUTEX_H_
+#ifndef _UTILS_CONCUR_RW_MUTEX_H_
+#define _UTILS_CONCUR_RW_MUTEX_H_
 
 //! @file   rw_mutex.h
 //! @brief  rw_mutex: Allows multiple readers and exclusive writer.
@@ -35,7 +35,7 @@
 //! @addtogroup utils
 //! @{
 
-namespace asarcar {
+namespace asarcar { namespace utils { namespace concur {
 //-----------------------------------------------------------------------------
 
 //! @class    rw_mutex
@@ -74,6 +74,6 @@ class rw_mutex {
 };    
 
 //-----------------------------------------------------------------------------
-} // namespace asarcar
+} } } // namespace asarcar { namespace utils { namespace concur {
 
-#endif // _RW_MUTEX_H_
+#endif // _UTILS_CONCUR_RW_MUTEX_H_

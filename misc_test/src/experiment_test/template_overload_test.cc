@@ -27,9 +27,11 @@
 // Local Headers
 #include "utils/basic/basictypes.h"
 #include "utils/basic/init.h"
-#include "utils/basic/meta.h"
+#include "utils/misc/meta.h"
 
 using namespace asarcar;
+using namespace asarcar::utils;
+using namespace asarcar::utils::misc;
 using namespace std;
 
 // Flag Declarations
@@ -79,6 +81,8 @@ void template_test(void) {
   LOG(INFO) << "fn<int&>(i)"; 
   // explicit set <T> to <int&> else error: cannot bind 'int' lvalue to 'const int&&'
   fn<int&>(i);
+  LOG(INFO) << "fn(i) i.e. infer template type"; 
+  fn<int>(3);
   LOG(INFO) << "fn<int>(3)"; 
   fn<int>(3);
   LOG(INFO) << "call_fn(function<void(int)>{fn<int>}, 3)";

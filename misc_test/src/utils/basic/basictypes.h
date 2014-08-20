@@ -47,8 +47,8 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef _BASE_UTILS_BASICTYPES_H_
-#define _BASE_UTILS_BASICTYPES_H_
+#ifndef _UTILS_BASIC_BASICTYPES_H_
+#define _UTILS_BASIC_BASICTYPES_H_
 
 // C++ Standard Headers
 // C Standard Headers
@@ -219,4 +219,4 @@ class AssignAttributeStartEnd {
 } // namespace asarcar
 //! @} End of Doxygen asarcar
 
-#endif  // _BASE_UTILS_BASICTYPES_H_
+#endif  // _UTILS_BASIC_BASICTYPES_H_
