@@ -44,20 +44,20 @@ namespace asarcar { namespace utils { namespace misc {
 template <int M, int K, int S>
 struct Unit {
   enum Dim {m=M, kg=K, s=S};
-  /**
-   * Kludge: We should declare a template struct is_unit that
-   * defines value as false and then specialize is_unit that 
-   * is true when Unit is passed. 
-   * Have not yet figured out how to do so on Unit that is 
-   * itself templatized.
-   */
+};
+
+template <typename U>
+struct UnitType {
+  constexpr static bool value = false; 
+};
+
+template <int M, int K, int S>
+struct UnitType<Unit<M,K,S>> {
   constexpr static bool value = true; 
 };
 
 template <typename U> 
-constexpr bool IsUnitType(void) {
-  return U::value;
-}
+constexpr bool IsUnitType(void) {return UnitType<U>::value;}
 
 //! @brief Unit created by multiplying two Quantities
 template <typename U1, typename U2>

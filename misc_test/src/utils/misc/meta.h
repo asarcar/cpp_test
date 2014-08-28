@@ -45,6 +45,10 @@ namespace asarcar { namespace utils { namespace misc {
 template <bool B, typename T, typename F>
 using Conditional = typename std::conditional<B,T,F>::type;
 
+//! @brief is_fundamental wrapper
+template <typename T>
+constexpr bool IsFundamental(void) { return std::is_fundamental<T>::value; }
+
 //! @brief is_pod wrapper
 template <typename T>
 constexpr bool IsPod(void) { return std::is_pod<T>::value; }
@@ -56,6 +60,10 @@ constexpr bool IsSame(void) { return std::is_same<T,U>::value; }
 //! @brief is_arithmetic wrapper
 template <typename T>
 constexpr bool IsArithmetic(void) { return std::is_arithmetic<T>::value; }
+
+//! @brief is_convertible wrapper
+template <typename From, typename To>
+constexpr bool IsConvertible(void) { return std::is_convertible<From, To>::value; }
 
 //! @brief enable_if wrapper
 template <bool B, typename T = void>
@@ -72,6 +80,34 @@ constexpr bool IsLValueReference(void) { return std::is_lvalue_reference<T>::val
 //! @brief is_rvalue_reference wrapper
 template <typename T>
 constexpr bool IsRValueReference(void) { return std::is_rvalue_reference<T>::value; }
+
+//! @brief boolean predicate combinators OR, AND, NOT
+// AND
+template <typename... Args>
+constexpr bool All(bool b, Args... args) {
+  return b && All(args...);
+}
+
+template <>
+constexpr bool All(bool b) {
+  return b;
+}
+
+// OR
+template <typename... Args>
+constexpr bool Any(bool b, Args... args) {
+  return b || Any(args...);
+}
+
+template <>
+constexpr bool Any(bool b) {
+  return b;
+}
+
+// NOT
+constexpr bool Not(bool b) {
+  return !b;
+}
 
 //-----------------------------------------------------------------------------
 } } } // namespace asarcar { namespace utils { namespace misc {

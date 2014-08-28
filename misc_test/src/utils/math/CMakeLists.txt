@@ -14,9 +14,6 @@
 
 # Author: Arijit Sarcar <sarcar_a@yahoo.com>
 
-add_library(math_utils matrix.cc)
-target_link_libraries(math_utils basic_utils)
-
 ######################################
 #           SubDirectories           #
 ######################################

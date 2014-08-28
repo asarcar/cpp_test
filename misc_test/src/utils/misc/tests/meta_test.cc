@@ -15,6 +15,8 @@
 // Author: Arijit Sarcar <sarcar_a@yahoo.com>
 
 // Standard C++ Headers
+#include <array>
+#include <initializer_list>
 #include <iostream>
 // Standard C Headers
 // Google Headers
@@ -32,19 +34,22 @@ using namespace std;
 // Flag Declarations
 DECLARE_bool(auto_test);
 
-struct NonPod {
-  NonPod(int i, int j): i_{i}, j_{j} {}
-  NonPod& operator+(const NonPod& other) {i_ += other.i_; j_ += other.j_; return *this;}
-  int i_, j_;
+struct NonFundamental {
+  NonFundamental& operator+(const NonFundamental& other) {
+    for (int i=0; i<static_cast<int>(v_.size()); ++i)
+      v_[i] += other.v_[i]; 
+    return *this;
+  }
+  array<int, 4> v_;
 };
-using Pod=int;
+using Fundamental=int;
 
 template <typename T>
 class MetaTester {
  public:
   MetaTester(T& val): v_(val) {}
 
-  Conditional<IsPod<T>(), T, T&> getField(void) { return v_; }
+  Conditional<IsFundamental<T>(), T, T&> getField(void) { return v_; }
 
   /**
    * Instantiation of template members are only triggered when there 
@@ -57,60 +62,78 @@ class MetaTester {
    * is used in a deeper stage of template instantiation). 
    */
   template <typename U = T>
-  EnableIf<(!IsPod<U>() && IsSame<T,U>()), U>* getPtr(void) { return &v_; }
+  EnableIf<(!IsFundamental<U>() && IsSame<T,U>()), U>* getPtr(void) { return &v_; }
 
   template <typename U = T>
-  EnableIf<(IsPod<U>() && IsSame<T,U>()), U> getVal(void) { return v_; }
+  EnableIf<(IsFundamental<U>() && IsSame<T,U>()), U> getVal(void) { return v_; }
 
   template <typename U>
-  EnableIf<(IsPod<U>() && IsPod<T>() && IsArithmetic<T>()) && IsArithmetic<U>()> 
+  EnableIf<(IsFundamental<U>() && IsFundamental<T>() && IsArithmetic<T>()) && IsArithmetic<U>()> 
   setVal(const U val) { v_ = val; }
 
  private:
-  Conditional<IsPod<T>(), T, T&> v_;
+  Conditional<IsFundamental<T>(), T, T&> v_;
 };
 
 int main(int argc, char **argv) {
   Init::InitEnv(&argc, &argv);
   
-  Pod pod = 1;
-  NonPod npod{3, 4}, npod2{5,6};
-  MetaTester<Pod> mtp{pod};
-  MetaTester<NonPod> mtnp{npod};
+  Fundamental fundamental = 1;
+  NonFundamental nfundamental{1,2,3,4};
+  MetaTester<Fundamental> mtf{fundamental};
+  MetaTester<NonFundamental> mtnf{nfundamental};
 
-  // substitution failures 
-  // auto p1 = mtp.getPtr();
-  // auto v1 = mtnp.getVal();
-  // mtnp.setVal(npod2);
+  LOG(INFO) << "NonFundamental: " << boolalpha << IsFundamental<NonFundamental>()
+            << " Fundamental: " << IsFundamental<Fundamental>() 
+            << " All(IsPod<int>, IsArithmetic<size_t>, IsFundamental<float>): "
+            << All(IsPod<int>(), IsArithmetic<size_t>(), IsFundamental<float>())
+            << " All(IsPod<int>, IsArithmetic<size_t>, IsFundamental<NonFundamental>): "
+            << All(IsPod<int>(), IsArithmetic<size_t>(), IsFundamental<NonFundamental>())
+            << " Any(IsPod<int>, IsArithmetic<size_t>, IsFundamental<NonFundamental>): "
+            << Any(IsPod<int>(), IsArithmetic<size_t>(), IsFundamental<NonFundamental>())
+            << " Not(IsFundamental<NonFundamental>()): "
+            << Not(IsFundamental<NonFundamental>());
+  LOG(INFO) << "Convertible<int, float>: " << boolalpha << IsConvertible<int, float>()
+            << " Convertible<double, int>: " << IsConvertible<double, int>()
+            << " Convertible<int, NonFundamental>: " 
+            << IsConvertible<int, NonFundamental>();
+
+  // Substitution Failures
+  // auto p1 = mtf.getPtr();
+  // auto v1 = mtnf.getVal();
 
   LOG(INFO) << "FIRST: "
-            << "pod=" << pod << ": mtp.getField()=" << mtp.getField() << ": " 
-            << "npod={" << npod.i_ << "," << npod.j_ << "}: " 
-            << "mtnp.getField()={" 
-            << mtnp.getField().i_ << "," << mtnp.getField().j_ << "}";
+            << "fundamental=" << fundamental << ": mtf.getField()=" << mtf.getField() << ": " 
+            << "nfundamental={" << nfundamental.v_[0] << "," << nfundamental.v_[1]
+            << "," << nfundamental.v_[2] << "," << nfundamental.v_[3] << "}: " 
+            << "mtnf.getField()={" 
+            << mtnf.getField().v_[0] << "," << mtnf.getField().v_[1]
+            << "," << mtnf.getField().v_[2] << "," << mtnf.getField().v_[3] << "}";
 
-  CHECK_EQ(mtp.getVal(), 1);
-  CHECK_EQ(mtnp.getPtr()->i_, 3);
-  CHECK_EQ(mtnp.getPtr()->j_, 4);
+  CHECK_EQ(mtf.getVal(), 1);
+  CHECK_EQ(mtnf.getPtr()->v_[0], 1);
+  CHECK_EQ(mtnf.getPtr()->v_[1], 2);
 
   
-  pod = 2;
-  npod = npod2; // uses assignment operator
+  fundamental = 2;
+  nfundamental = {5,6,7,8}; // uses assignment operator
   
   LOG(INFO) << "SECOND: "
-            << "pod=" << pod << ": mtp.getField()=" << mtp.getField() << ": " 
-            << "npod={" << npod.i_ << "," << npod.j_ << "}: " 
-            << "mtnp.getField()={" 
-            << mtnp.getField().i_ << "," << mtnp.getField().j_ << "}";
+            << "fundamental=" << fundamental << ": mtf.getField()=" << mtf.getField() << ": " 
+            << "nfundamental={" << nfundamental.v_[0] << "," << nfundamental.v_[1]
+            << nfundamental.v_[2] << "," << nfundamental.v_[3] << "}: " 
+            << "mtnf.getField()={" 
+            << mtnf.getField().v_[0] << "," << mtnf.getField().v_[1]
+            << mtnf.getField().v_[2] << "," << mtnf.getField().v_[3] << "}";
 
-  CHECK_EQ(mtp.getVal(), 1);
-  mtp.setVal(2);
-  CHECK_EQ(mtp.getVal(), 2);
+  CHECK_EQ(mtf.getVal(), 1);
+  mtf.setVal(2);
+  CHECK_EQ(mtf.getVal(), 2);
 
-  CHECK_EQ(mtnp.getField().i_, 5);
-  CHECK_EQ(mtnp.getField().j_, 6);
-  CHECK_EQ(mtnp.getPtr()->i_, 5);
-  CHECK_EQ(mtnp.getPtr()->j_, 6);
+  CHECK_EQ(mtnf.getField().v_[0], 5);
+  CHECK_EQ(mtnf.getField().v_[1], 6);
+  CHECK_EQ(mtnf.getPtr()->v_[0], 5);
+  CHECK_EQ(mtnf.getPtr()->v_[1], 6);
 
   return 0;
 }
