@@ -32,9 +32,6 @@
 using namespace asarcar;
 using namespace std;
 
-// Flag Declarations
-DECLARE_bool(auto_test);
-
 static void ptr_diff_test(void);
 
 int main(int argc, char **argv) {
@@ -52,6 +49,17 @@ void ptr_diff_test(void) {
   MyIntArray i = {0, 1, 2, 3, 4};
   MyDoubleArray d = {0.1, 1.1, 2.1, 3.1, 4.1};
 
+  cout << "  MyIntArray = array<int, 5> "
+       << ": sizeof(MyIntArray)= " << sizeof(MyIntArray)
+       << ": MyDoubleArray = array<double, 5> "
+       << ": sizeof(MyDoubleArray)= " << sizeof(MyDoubleArray)
+       << ": sizeof(long)= " << sizeof(long) 
+       << ": sizeof(long long)= " << sizeof(long long) << endl;
+  cout << "  sizeof(int *)= " << sizeof(int *)
+       << ": sizeof(int)= " << sizeof(int)
+       << ": sizeof(ptrdiff_t)= " << sizeof(ptrdiff_t)
+       << ": sizeof(size_t)= " << sizeof(size_t) << endl;
+
   ptrdiff_t iPtrDiff = &i[0] - &i[5];
   ptrdiff_t dPtrDiff = &d[0] - &d[5];
 
@@ -61,20 +69,16 @@ void ptr_diff_test(void) {
   MyIntArray::difference_type iDiff = i.begin() - i.end();
   MyDoubleArray::difference_type dDiff = d.begin() - d.end();
 
-  LOG(INFO) << "  MyIntArray: array<int, 5> [0]..[4]= " << i[0] << " " << i[4]
-            << ": Ptr &[0]= " << &i[0] << " &[5]= " << &i[5] 
-            << ": ptrDiff &[0] - &[5]= " << iPtrDiff
-            << ": byte ptrDiff &[0] - &[5]= " << ciPtrDiff
-            << ": diff_type begin - end= " << iDiff
-            << "  MyDoubleArray: array<double, 5> [0]..[4]= " << d[0] << " " << d[4]
-            << ": Ptr &[0]= " << &d[0] << " &[5]= " << &d[5] 
-            << ": ptrDiff &[0] - &[5]= " << dPtrDiff
-            << ": byte ptrDiff &[0] - &[5]= " << cdPtrDiff
-            << ": diff_type begin - end= " << dDiff << std::endl;
-
+  cout << "  MyIntArray: array<int, 5> [0]..[4]= " << i[0] << " " << i[4]
+       << ": Ptr &[0]= " << &i[0] << " &[5]= " << &i[5] 
+       << ": ptrDiff &[0] - &[5]= " << iPtrDiff
+       << ": byte ptrDiff &[0] - &[5]= " << ciPtrDiff
+       << ": diff_type begin - end= " << iDiff << endl;
+  cout << "  MyDoubleArray: array<double, 5> [0]..[4]= " << d[0] << " " << d[4]
+       << ": Ptr &[0]= " << &d[0] << " &[5]= " << &d[5] 
+       << ": ptrDiff &[0] - &[5]= " << dPtrDiff
+       << ": byte ptrDiff &[0] - &[5]= " << cdPtrDiff
+       << ": diff_type begin - end= " << dDiff << endl;
+  
   return;
 }
-
-DEFINE_bool(auto_test, false, 
-            "test run programmatically (when true) or manually (when false)");
-
