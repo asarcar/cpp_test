@@ -26,12 +26,15 @@ using namespace std;
 template <typename T>
 class Cmp {
  public:
-  Cmp(const T& val) : base_{val} {}
+  Cmp(const T& val) : 
+      base_{val}, unused_{val,val,val,val,val,val,val,val}
+  {}
   bool operator()(const T& val) const {
     return greater<T>{}(val, base_);
   }
  private:
   T base_;
+  array<T, 8> unused_;
 };
 
 bool IsGreater(const TwoVal& val) {
@@ -39,9 +42,6 @@ bool IsGreater(const TwoVal& val) {
 }
 
 int main(void) {
-  Cmp<int>    fp{10};
-  Cmp<TwoVal> fc{gkBase};
-
   /**
    * MORAL:
    * Function is a holder for any kind of function, 
@@ -60,18 +60,22 @@ int main(void) {
    * concrete object. We use it just as any other function...
    */
 
+  Cmp<int>    fp{10};
+  cout << "fp{10}: sizeof(fp)=" << sizeof(fp) << endl;
   string s1("fp{10}");
-  cout << s1 << endl;
   cout << string(55, '-') << endl;
   cout << s1 << left << setw(40) << " < fp(11)  " << boolalpha << fp(11) << endl;
 
   function<bool(const int&)> fp2 = fp;
-  cout << "fp2: function<bool(const int&)> fp2 = fp" << endl;
+  cout << "fp2: function<bool(const int&)> fp2 = fp: sizeof(fp2)=" 
+       << sizeof(fp2) << endl;
   cout << s1 << left << setw(40) << " < fp2(09) " << boolalpha << fp2(9) << endl;
   cout << s1 << left << setw(40) << " < fp2(10) " << boolalpha << fp2(10) << endl;
   cout << s1 << left << setw(40) << " < fp2(07) " << boolalpha << fp2(7) << endl;
   cout << string(55, '=') << endl;
 
+  Cmp<TwoVal> fc{gkBase};
+  cout << "fc{TwoVal{20,30}}: sizeof(fc)=" << sizeof(fc) << endl;
   string s2("fc{gkBase}");
   cout << "gkBase = TwoVal{20,30} = " << s2 << endl;
   cout << string(55, '-') << endl;
@@ -79,14 +83,16 @@ int main(void) {
        << boolalpha << fc({10,40}) << endl;
 
   function<bool(const TwoVal&)> fc2 = fc;
-  cout << "fc2: function<bool(const TwoVal&)> fc2 = fc" << endl;
+  cout << "fc2: function<bool(const TwoVal&)> fc2 = fc: sizeof(fc2)=" 
+       << sizeof(fc2) << endl;
   cout << s2 << left << setw(29) << " < fc2(TwoVal{25,25})) " 
        << boolalpha << fc2({25,25}) << endl;
   cout << s2 << left << setw(29) << " < fc2(TwoVal{20,40})) " 
        << boolalpha << fc2({20,40}) << endl;
   
   function<bool(const TwoVal&)> fc3 = &IsGreater;
-  cout << "fc3: function<bool(const TwoVal&)> fc3 = &IsGreater" << endl;
+  cout << "fc3: function<bool(const TwoVal&)> fc3 = &IsGreater: sizeof(fc3)=" 
+       << sizeof(fc3) << endl;
   cout << "     bool IsGreater(const TwoVal& val) {" << endl
        << "       return greater<TwoVal>{}(val, gkBase);" << endl
        << "     }" << endl;
@@ -99,9 +105,10 @@ int main(void) {
   cout << "fc4: function<bool(const TwoVal&)> fc3 = [](const TwoVal &val) {" << endl
        << "       return greater<TwoVal>{}(val, gkBase);" << endl
        << "     };" << endl;
+  cout << "     sizeof(fc4)=" << sizeof(fc4) << endl;
   cout << s2 << left << setw(29) << " < fc4(TwoVal{20,30})) " 
        << boolalpha << fc4({20,30}) << endl;
-  cout << s2 << left << setw(29) << " < fc4(TwoVal{22, 28}) " 
+  cout << s2 << left << setw(29) << " < fc4(TwoVal{22,28}) " 
        << boolalpha << fc4(TwoVal{22,28}) << endl;
   cout << string(55, '=') << endl;
 

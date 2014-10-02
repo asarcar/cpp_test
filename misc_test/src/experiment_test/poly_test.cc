@@ -1,6 +1,12 @@
+// Standard C++ Headers
+#include <iostream>
 #include <iomanip>     // std::left, std::setw ...
-#include <iostream>    // std::cout ...
+// Standard C Headers
+// Google Headers
+// Local Headers
+#include "utils/basic/fassert.h"
 
+using namespace asarcar;
 using namespace std;
 
 class Animal {
@@ -49,7 +55,7 @@ int main(void) {
   Carnivore  c;
   Cat        cat;
   Tiger      tiger;
-  
+
   Animal     *ah_p     = new Herbivore;
   Animal     *ac_p     = new Carnivore;
   Animal     *acat_p   = new Cat;
@@ -57,6 +63,21 @@ int main(void) {
 
   Carnivore  *ccat_p   = new Cat;
   Carnivore  *ctiger_p = new Tiger;
+
+  /**
+   * Operations allowed:
+   * Child = Parent
+   * Parent = Child
+   * Reference/Ptr to Child = Reference/Ptr to Parent
+   * Reference/Ptr to Parent = Reference/Ptr to Child
+   */
+  a = h; // 'h' content is "sliced" to match to 'a'
+  // no match for 'operator=' (operand types are 'Cat' and 'Carnivore')
+  // cat = c;
+  Animal *ah2_p = &h;
+  FASSERT(ah2_p != nullptr);
+  // invalid conversion from 'Animal*' to 'Herbivore*'
+  // Herbivore *ha_p = &a; 
 
   /**
    * MORAL:

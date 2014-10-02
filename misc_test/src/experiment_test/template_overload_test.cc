@@ -34,9 +34,6 @@ using namespace asarcar::utils;
 using namespace asarcar::utils::misc;
 using namespace std;
 
-// Flag Declarations
-DECLARE_bool(auto_test);
-
 static void template_test(void);
 
 int main(int argc, char **argv) {
@@ -49,71 +46,70 @@ int main(int argc, char **argv) {
 
 template <typename T>
 EnableIf<(IsReference<T>()), void> fn(const T&& t) {
-  LOG(INFO) << "fn: args t=" << t << std::boolalpha 
-            << ": reference= " << IsReference<T>()
-            << ", rvalue=" << IsRValueReference<T>();
+  cout << "fn: args t=" << t << std::boolalpha 
+       << ": reference= " << IsReference<T>()
+       << ", rvalue=" << IsRValueReference<T>() << endl;
   return;
 }
 
 //! @brief: vanilla (no reference) function needed to bind to fn<int>(int)
-//! @details: otherwise calls to fn<int>(lvalue) would fail!!!
+//! @details: otherwise calls to fn<int>(rvalue or lvalue) would fail!!!
 template <typename T>
 EnableIf<(!IsReference<T>()), void> fn(const T t) {
-  LOG(INFO) << "fn: args t=" << t << std::boolalpha 
-            << ": reference= " << IsReference<T>() 
-            << ", rvalue=" << IsRValueReference<T>();
+  cout << "fn: args t=" << t << std::boolalpha 
+       << ": reference= " << IsReference<T>() 
+       << ", rvalue=" << IsRValueReference<T>() << endl;
   return;
 }
 
 template <typename F, typename T>
 void call_fn(F&& f, T&& t) {
-  LOG(INFO) << "call_fn: args f-rvalue=" << std::boolalpha 
-            << IsRValueReference<F&&>() 
-            << ", t-reference=" << IsReference<T&&>() 
-            << ", t-rvalue=" << IsRValueReference<T&&>();
+  cout << "call_fn: args f-rvalue=" << std::boolalpha 
+       << IsRValueReference<F&&>() 
+       << ", t-reference=" << IsReference<T&&>() 
+       << ", t-rvalue=" << IsRValueReference<T&&>() << endl;
   f(forward<T>(t));
 }
 
 void template_test(void) {
-  LOG(INFO) << "fn<int&&>(3)"; 
+  cout << "fn<int&&>(3)" << endl; 
   fn<int&&>(3);
   int i{3};
-  LOG(INFO) << "fn<int&>(i)"; 
+  // fn(i): inference of arg type: first tries int& and then int
+  cout << "fn(i)" << endl; 
+  fn(i);
   // explicit set <T> to <int&> else error: cannot bind 'int' lvalue to 'const int&&'
+  // fn<int>(i): <int> specification needed
+  // fn(i): inference of arg type: first tries int& and then int
+  cout << "fn<int&>(i)" << endl; 
   fn<int&>(i);
-  LOG(INFO) << "fn(i) i.e. infer template type"; 
+  cout << "fn<int>(3)" << endl; 
   fn<int>(3);
-  LOG(INFO) << "fn<int>(3)"; 
-  fn<int>(3);
-  LOG(INFO) << "call_fn(function<void(int)>{fn<int>}, 3)";
+  cout << "call_fn(function<void(int)>{fn<int>}, 3)" << endl;
   call_fn(function<void(int)>{fn<int>}, 3);
-  LOG(INFO) << "call_fn(function<void(int&&)>{fn<int&&>}, 3)";
+  cout << "call_fn(function<void(int&&)>{fn<int&&>}, 3)" << endl;
   call_fn(function<void(int&&)>{fn<int&&>}, 3);
-  LOG(INFO) << "call_fn(function<void(int&)>{fn<int&>}, i)";
+  cout << "call_fn(function<void(int&)>{fn<int&>}, i)" << endl;
   call_fn(function<void(int&)>{fn<int&>}, i);
-  LOG(INFO) << "call_fn(fn<int>, i)";
+  cout << "call_fn(fn<int>, i)" << endl;
   // explicit set <T> to <int&> else error: cannot bind 'int' lvalue to 'const int&&'
   call_fn(fn<int&>, i); 
-  LOG(INFO) << "call_fn(lambda_fn = [](int j) -> void";
+  cout << "call_fn(lambda_fn = [](int j) -> void" << endl;
   auto lambda_fn = [](int j) -> void {
-    LOG(INFO) << "j=" << j; 
+    cout << "j=" << j << endl; 
     return;
   };
   call_fn(lambda_fn, i);
-  LOG(INFO) << "call_fn([](int& j) -> void";
+  cout << "call_fn([](int& j) -> void" << endl;
   call_fn([](int& j) -> void {
-      LOG(INFO) << "j=" << j; 
+      cout << "j=" << j << endl; 
       return;
     }, i);
-  LOG(INFO) << "call_fn([](int&& j) -> void";
+  cout << "call_fn([](int&& j) -> void" << endl;
   call_fn([](int&& j) -> void {
-      LOG(INFO) << "j=" << j; 
+      cout << "j=" << j << endl; 
       return;
     }, 3);
 
   return;
 }
-
-DEFINE_bool(auto_test, false, 
-            "test run programmatically (when true) or manually (when false)");
-
