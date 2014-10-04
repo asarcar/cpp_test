@@ -14,6 +14,7 @@
 
 # Author: Arijit Sarcar <sarcar_a@yahoo.com>
 add_ctest_fn(fassert)
+add_ctest_fn(mem_block)
 add_ctest_fn(siz)
 
 

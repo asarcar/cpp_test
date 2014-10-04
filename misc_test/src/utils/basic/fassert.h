@@ -78,7 +78,6 @@ class FAssert {
 #else // if (FASSERT_REACTION_LEVEL == 2)
   static constexpr ReactionLevel _cur_level = ReactionLevel::_warning;
 #endif
-
   struct Error : std::runtime_error {
     Error(const std::string &s) : std::runtime_error{s} {}
   };

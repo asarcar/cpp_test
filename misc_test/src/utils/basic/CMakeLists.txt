@@ -14,7 +14,7 @@
 
 # Author: Arijit Sarcar <sarcar_a@yahoo.com>
 
-add_library(basic_utils init.cc)
+add_library(basic_utils init.cc mem_block.cc)
 target_link_libraries(basic_utils gflags glog profiler tcmalloc)
 
 ######################################
