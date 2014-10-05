@@ -58,7 +58,11 @@ constexpr bool IsPod(void) { return std::is_pod<T>::value; }
 template <typename T, typename U>
 constexpr bool IsSame(void) { return std::is_same<T,U>::value; }
 
-//! @brief is_arithmetic wrapper
+//! @brief is_integral wrapper: integer types (bool, char, int, long long, ...)
+template <typename T>
+constexpr bool IsIntegral(void) { return std::is_integral<T>::value; }
+
+//! @brief is_arithmetic wrapper: integer or floating point types
 template <typename T>
 constexpr bool IsArithmetic(void) { return std::is_arithmetic<T>::value; }
 
