@@ -163,20 +163,8 @@ struct RangeCreator <First, Num, 0, Val, Args...> {
 template<int Num>
 using BasicRangeCreator=typename RangeCreator<1,Num,Num,Num>::type;
 
-// Bind Arguments to Positions
-template<typename Ret, typename... Args, int... Positions>
-std::function<Ret(Args...)> 
-fn_bind_arg_pos(std::function<Ret(Args...)>& fn_orig,
-                const Range<Positions...>&   arg_pos) {
-  return std::bind(fn_orig, std::_Placeholder<Positions>()...);
-}
-
-template <typename Ret, typename... Args>
-std::function<Ret(Args...)>
-fn_bind(std::function<Ret(Args...)>& fn_orig) {
-  auto range = BasicRangeCreator<sizeof...(Args)>();
-  return fn_bind_arg_pos(fn_orig, range);
-}
+template <int Base, int Num>
+using NewRangeCreator=typename RangeCreator<Base+1, Num, Num, Base+Num>::type;
 
 //-----------------------------------------------------------------------------
 } } } // namespace asarcar { namespace utils { namespace misc {

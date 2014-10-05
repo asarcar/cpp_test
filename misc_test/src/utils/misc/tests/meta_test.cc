@@ -66,7 +66,12 @@ class MetaTester {
  public:
   MetaTester(void) : 
     fundamental_{1}, nfundamental_{1,2,3,4},
-    mtf_{fundamental_}, mtnf_{nfundamental_}, mul_{[](int a, int b){return a*b;}} {}
+    mtf_{fundamental_}, mtnf_{nfundamental_}, 
+    mul_{
+      [](std::pair<int, int> v1, int a, int b, std::pair<int,int> v2, int c){
+        return v1.first*v1.second*a*b*v2.first*v2.second*c;
+      }
+    } {}
   ~MetaTester(void) {}
   void Run(void) {
     LOG(INFO) << "NonFundamental: " << boolalpha << IsFundamental<NonFundamental>()
@@ -124,7 +129,7 @@ class MetaTester {
 
     LOG(INFO) << "FN_BIND: Test";
     auto mul2 = fn_bind(mul_);
-    CHECK_EQ(mul2(10,20), 200);
+    CHECK_EQ(mul2(std::make_pair(2,4),6,8,std::make_pair(10,12),14), (2*4*6*8*10*12*14));
 
     return;
   }
@@ -145,7 +150,23 @@ class MetaTester {
   MetaClass<Fundamental>    mtf_;
   MetaClass<NonFundamental> mtnf_;
 
-  function<int(int, int)>   mul_;
+  using IntPair=std::pair<int,int>;
+  // Bind Arguments to Positions
+  template<typename Ret, typename... Args, int... Positions>
+  std::function<Ret(Args...)> 
+  fn_bind_arg_pos(std::function<Ret(Args...)>& fn_orig,
+                  const Range<Positions...>&   arg_pos) {
+    return std::bind(fn_orig, std::_Placeholder<Positions>()...);
+  }
+
+  template <typename Ret, typename... Args>
+  std::function<Ret(Args...)>
+  fn_bind(std::function<Ret(Args...)>& fn_orig) {
+    auto range = BasicRangeCreator<sizeof...(Args)>();
+    return fn_bind_arg_pos(fn_orig, range);
+  }
+
+  function<int(IntPair,int,int,IntPair,int)>   mul_;
 };
 
 // Flag Declarations
