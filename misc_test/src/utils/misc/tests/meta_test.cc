@@ -31,23 +31,10 @@ using namespace asarcar::utils;
 using namespace asarcar::utils::misc;
 using namespace std;
 
-// Flag Declarations
-DECLARE_bool(auto_test);
-
-struct NonFundamental {
-  NonFundamental& operator+(const NonFundamental& other) {
-    for (int i=0; i<static_cast<int>(v_.size()); ++i)
-      v_[i] += other.v_[i]; 
-    return *this;
-  }
-  array<int, 4> v_;
-};
-using Fundamental=int;
-
 template <typename T>
-class MetaTester {
+class MetaClass {
  public:
-  MetaTester(T& val): v_(val) {}
+  MetaClass(T& val): v_(val) {}
 
   Conditional<IsFundamental<T>(), T, T&> getField(void) { return v_; }
 
@@ -75,65 +62,102 @@ class MetaTester {
   Conditional<IsFundamental<T>(), T, T&> v_;
 };
 
+class MetaTester {
+ public:
+  MetaTester(void) : 
+    fundamental_{1}, nfundamental_{1,2,3,4},
+    mtf_{fundamental_}, mtnf_{nfundamental_}, mul_{[](int a, int b){return a*b;}} {}
+  ~MetaTester(void) {}
+  void Run(void) {
+    LOG(INFO) << "NonFundamental: " << boolalpha << IsFundamental<NonFundamental>()
+              << " Fundamental: " << IsFundamental<Fundamental>() 
+              << " All(IsPod<int>, IsArithmetic<size_t>, IsFundamental<float>): "
+              << All(IsPod<int>(), IsArithmetic<size_t>(), IsFundamental<float>())
+              << " All(IsPod<int>, IsArithmetic<size_t>, IsFundamental<NonFundamental>): "
+              << All(IsPod<int>(), IsArithmetic<size_t>(), IsFundamental<NonFundamental>())
+              << " Any(IsPod<int>, IsArithmetic<size_t>, IsFundamental<NonFundamental>): "
+              << Any(IsPod<int>(), IsArithmetic<size_t>(), IsFundamental<NonFundamental>())
+              << " Not(IsFundamental<NonFundamental>()): "
+              << Not(IsFundamental<NonFundamental>());
+    LOG(INFO) << "Convertible<int, float>: " << boolalpha << IsConvertible<int, float>()
+              << " Convertible<double, int>: " << IsConvertible<double, int>()
+              << " Convertible<int, NonFundamental>: " 
+              << IsConvertible<int, NonFundamental>();
+    
+    // Substitution Failures
+    // auto p1 = mtf.getPtr();
+    // auto v1 = mtnf.getVal();
+
+    LOG(INFO) << "FIRST: "
+              << "fundamental=" << fundamental_ << ": mtf.getField()=" << mtf_.getField() << ": " 
+              << "nfundamental={" << nfundamental_.v_[0] << "," << nfundamental_.v_[1]
+              << "," << nfundamental_.v_[2] << "," << nfundamental_.v_[3] << "}: " 
+              << "mtnf.getField()={" 
+              << mtnf_.getField().v_[0] << "," << mtnf_.getField().v_[1]
+              << "," << mtnf_.getField().v_[2] << "," << mtnf_.getField().v_[3] << "}";
+    
+    CHECK_EQ(mtf_.getVal(), 1);
+    CHECK_EQ(mtnf_.getPtr()->v_[0], 1);
+    CHECK_EQ(mtnf_.getPtr()->v_[1], 2);
+    
+  
+    fundamental_ = 2;
+    nfundamental_ = {5,6,7,8}; // uses assignment operator
+    
+    LOG(INFO) << "SECOND: "
+              << "fundamental=" << fundamental_ << ": mtf.getField()=" << mtf_.getField() << ": " 
+              << "nfundamental={" << nfundamental_.v_[0] << "," << nfundamental_.v_[1]
+              << nfundamental_.v_[2] << "," << nfundamental_.v_[3] << "}: " 
+              << "mtnf.getField()={" 
+              << mtnf_.getField().v_[0] << "," << mtnf_.getField().v_[1]
+              << mtnf_.getField().v_[2] << "," << mtnf_.getField().v_[3] << "}";
+
+    CHECK_EQ(mtf_.getVal(), 1);
+    mtf_.setVal(2);
+    CHECK_EQ(mtf_.getVal(), 2);
+    
+    CHECK_EQ(mtnf_.getField().v_[0], 5);
+    CHECK_EQ(mtnf_.getField().v_[1], 6);
+    CHECK_EQ(mtnf_.getPtr()->v_[0], 5);
+    CHECK_EQ(mtnf_.getPtr()->v_[1], 6);
+    
+
+    LOG(INFO) << "FN_BIND: Test";
+    auto mul2 = fn_bind(mul_);
+    CHECK_EQ(mul2(10,20), 200);
+
+    return;
+  }
+
+ private:
+  struct NonFundamental {
+    NonFundamental& operator+(const NonFundamental& other) {
+      for (int i=0; i<static_cast<int>(v_.size()); ++i)
+        v_[i] += other.v_[i]; 
+      return *this;
+    }
+    array<int, 4> v_;
+  };
+  using Fundamental=int;
+  
+  Fundamental               fundamental_;
+  NonFundamental            nfundamental_;
+  MetaClass<Fundamental>    mtf_;
+  MetaClass<NonFundamental> mtnf_;
+
+  function<int(int, int)>   mul_;
+};
+
+// Flag Declarations
+DECLARE_bool(auto_test);
+
 int main(int argc, char **argv) {
   Init::InitEnv(&argc, &argv);
   
-  Fundamental fundamental = 1;
-  NonFundamental nfundamental{1,2,3,4};
-  MetaTester<Fundamental> mtf{fundamental};
-  MetaTester<NonFundamental> mtnf{nfundamental};
-
-  LOG(INFO) << "NonFundamental: " << boolalpha << IsFundamental<NonFundamental>()
-            << " Fundamental: " << IsFundamental<Fundamental>() 
-            << " All(IsPod<int>, IsArithmetic<size_t>, IsFundamental<float>): "
-            << All(IsPod<int>(), IsArithmetic<size_t>(), IsFundamental<float>())
-            << " All(IsPod<int>, IsArithmetic<size_t>, IsFundamental<NonFundamental>): "
-            << All(IsPod<int>(), IsArithmetic<size_t>(), IsFundamental<NonFundamental>())
-            << " Any(IsPod<int>, IsArithmetic<size_t>, IsFundamental<NonFundamental>): "
-            << Any(IsPod<int>(), IsArithmetic<size_t>(), IsFundamental<NonFundamental>())
-            << " Not(IsFundamental<NonFundamental>()): "
-            << Not(IsFundamental<NonFundamental>());
-  LOG(INFO) << "Convertible<int, float>: " << boolalpha << IsConvertible<int, float>()
-            << " Convertible<double, int>: " << IsConvertible<double, int>()
-            << " Convertible<int, NonFundamental>: " 
-            << IsConvertible<int, NonFundamental>();
-
-  // Substitution Failures
-  // auto p1 = mtf.getPtr();
-  // auto v1 = mtnf.getVal();
-
-  LOG(INFO) << "FIRST: "
-            << "fundamental=" << fundamental << ": mtf.getField()=" << mtf.getField() << ": " 
-            << "nfundamental={" << nfundamental.v_[0] << "," << nfundamental.v_[1]
-            << "," << nfundamental.v_[2] << "," << nfundamental.v_[3] << "}: " 
-            << "mtnf.getField()={" 
-            << mtnf.getField().v_[0] << "," << mtnf.getField().v_[1]
-            << "," << mtnf.getField().v_[2] << "," << mtnf.getField().v_[3] << "}";
-
-  CHECK_EQ(mtf.getVal(), 1);
-  CHECK_EQ(mtnf.getPtr()->v_[0], 1);
-  CHECK_EQ(mtnf.getPtr()->v_[1], 2);
-
-  
-  fundamental = 2;
-  nfundamental = {5,6,7,8}; // uses assignment operator
-  
-  LOG(INFO) << "SECOND: "
-            << "fundamental=" << fundamental << ": mtf.getField()=" << mtf.getField() << ": " 
-            << "nfundamental={" << nfundamental.v_[0] << "," << nfundamental.v_[1]
-            << nfundamental.v_[2] << "," << nfundamental.v_[3] << "}: " 
-            << "mtnf.getField()={" 
-            << mtnf.getField().v_[0] << "," << mtnf.getField().v_[1]
-            << mtnf.getField().v_[2] << "," << mtnf.getField().v_[3] << "}";
-
-  CHECK_EQ(mtf.getVal(), 1);
-  mtf.setVal(2);
-  CHECK_EQ(mtf.getVal(), 2);
-
-  CHECK_EQ(mtnf.getField().v_[0], 5);
-  CHECK_EQ(mtnf.getField().v_[1], 6);
-  CHECK_EQ(mtnf.getPtr()->v_[0], 5);
-  CHECK_EQ(mtnf.getPtr()->v_[1], 6);
+  LOG(INFO) << argv[0] << " Executing Test";
+  MetaTester mt;
+  mt.Run();
+  LOG(INFO) << argv[0] << " Test Passed";
 
   return 0;
 }

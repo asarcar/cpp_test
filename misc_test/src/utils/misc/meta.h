@@ -25,8 +25,9 @@
 
 // C++ Standard Headers
 #include <iostream>
-#include <functional>
+#include <functional>       // std::function, std::_Placeholder<N>
 #include <type_traits>
+#include <utility>          // std::pair
 
 // C Standard Headers
 // Google Headers
@@ -107,6 +108,74 @@ constexpr bool Any(bool b) {
 // NOT
 constexpr bool Not(bool b) {
   return !b;
+}
+
+//
+// Syntactic sugar to help bind integer ranges [i,i+k) args to functions
+// 
+//   int fn_orig(t1 arg1, ..., th argh, ti argi, ..., t(i+k) argj, ..., tN argN);
+// 
+//   function<int(t1, ..., th, t(i+k), ..., tN)> fn_new = 
+//     fn_bind(fn_new, i, argi, ..., arg(i+k-1));
+// 
+//   fn_new(arg1, ..., argh, arg(i+k), ..., argN) calls 
+//     fn_orig(arg1, ..., argN)
+// 
+// Default arguments to fn_bind: i=1
+// 
+
+// Range<i, i+1, ..., i+k-1> = RangeFactory<i, k>::type;
+template <int... Args>
+struct Range {
+};
+
+template<int First, int Num, int Offset, int Val, int... Args> 
+struct RangeCreator {
+  static_assert(First > 0, "RangeCreator: First > 0 failed");
+  static_assert(Num > 0, "RangeCreator: Num > 0 failed");
+  static_assert(!(Val < 0), "RangeCreator: Val >= 0 failed");
+  static_assert(!(Offset < 0), "RangeCreator: Offset >= 0 failed");
+  using type = typename RangeCreator<First, Num, Offset-1, Val-1, Val, Args...>::type;
+};
+
+template <int First, int Num, int Val, int... Args>
+struct RangeCreator <First, Num, 0, Val, Args...> {
+  static_assert(First > 0, "RangeCreator: First > 0 failed");
+  static_assert(Num > 0, "RangeCreator: Num > 0 failed");
+  static_assert(!(Val < 0), "RangeCreator: Val >= 0 failed");
+  using type = Range<Args...>;
+};
+
+//
+// One attempt to solve the above recursive definition could be
+// to consolidate both definitions into one:
+// template<int First, int Num, int Val, int... Args>
+// struct RangeCreator {
+//   using type = 
+//     Conditional<(First - Val == 1),
+//                 Range<Args...>, 
+//                 typename RangeCreator<First, Num, Val-1, Val, Args...>::type>;
+// };
+// However, Conditional seems to *always* evaluate both the clauses which 
+// leads to infinite recursion...
+//
+
+template<int Num>
+using BasicRangeCreator=typename RangeCreator<1,Num,Num,Num>::type;
+
+// Bind Arguments to Positions
+template<typename Ret, typename... Args, int... Positions>
+std::function<Ret(Args...)> 
+fn_bind_arg_pos(std::function<Ret(Args...)>& fn_orig,
+                const Range<Positions...>&   arg_pos) {
+  return std::bind(fn_orig, std::_Placeholder<Positions>()...);
+}
+
+template <typename Ret, typename... Args>
+std::function<Ret(Args...)>
+fn_bind(std::function<Ret(Args...)>& fn_orig) {
+  auto range = BasicRangeCreator<sizeof...(Args)>();
+  return fn_bind_arg_pos(fn_orig, range);
 }
 
 //-----------------------------------------------------------------------------

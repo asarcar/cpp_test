@@ -86,9 +86,9 @@ class MemBlockTester {
 int main(int argc, char **argv) {
   Init::InitEnv(&argc, &argv);
 
+  LOG(INFO) << argv[0] << " Executing Test";
   MemBlockTester mbt;
   mbt.Run();
-
   LOG(INFO) << argv[0] << " Test Passed";
 
   return 0;
