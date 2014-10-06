@@ -18,6 +18,7 @@
 #include <array>
 #include <initializer_list>
 #include <iostream>
+#include <unordered_set>      // std::unordered_set
 // Standard C Headers
 // Google Headers
 #include <glog/logging.h>   
@@ -71,7 +72,7 @@ class MetaTester {
       [](std::pair<int, int> v1, int a, int b, std::pair<int,int> v2, int c){
         return v1.first*v1.second*a*b*v2.first*v2.second*c;
       }
-    } {}
+    }, set{numeric_limits<int128_t>::min(), numeric_limits<int128_t>::max()} {} 
   ~MetaTester(void) {}
   void Run(void) {
     LOG(INFO) << "NonFundamental: " << boolalpha << IsFundamental<NonFundamental>()
@@ -112,10 +113,10 @@ class MetaTester {
     LOG(INFO) << "SECOND: "
               << "fundamental=" << fundamental_ << ": mtf.getField()=" << mtf_.getField() << ": " 
               << "nfundamental={" << nfundamental_.v_[0] << "," << nfundamental_.v_[1]
-              << nfundamental_.v_[2] << "," << nfundamental_.v_[3] << "}: " 
+              << "," << nfundamental_.v_[2] << "," << nfundamental_.v_[3] << "}: " 
               << "mtnf.getField()={" 
               << mtnf_.getField().v_[0] << "," << mtnf_.getField().v_[1]
-              << mtnf_.getField().v_[2] << "," << mtnf_.getField().v_[3] << "}";
+              << "" << mtnf_.getField().v_[2] << "," << mtnf_.getField().v_[3] << "}";
 
     CHECK_EQ(mtf_.getVal(), 1);
     mtf_.setVal(2);
@@ -130,6 +131,21 @@ class MetaTester {
     LOG(INFO) << "FN_BIND: Test";
     auto mul2 = fn_bind(mul_);
     CHECK_EQ(mul2(std::make_pair(2,4),6,8,std::make_pair(10,12),14), (2*4*6*8*10*12*14));
+
+
+    LOG(INFO) << "INT128: Test"; 
+    CHECK_EQ(set.size(), 2);
+    auto it_end = set.end();
+    auto it_zero = set.find(0);
+    CHECK(it_zero == it_end);
+    auto it_min = set.find(numeric_limits<int128_t>::min());
+    CHECK(it_min != it_end);
+    auto it_max = set.find(numeric_limits<int128_t>::max());
+    CHECK(it_max != it_end);
+    int val = (*it_min + *it_max + 1);
+    // Not directly invoking CHECK_EQ(*it...) as ostream header (till GCC 4.8)
+    // does not deal with 128 bit overloaded stream operators << or >>
+    CHECK_EQ(val, 0);
 
     return;
   }
@@ -167,6 +183,8 @@ class MetaTester {
   }
 
   function<int(IntPair,int,int,IntPair,int)>   mul_;
+
+  unordered_set<int128_t> set;
 };
 
 // Flag Declarations

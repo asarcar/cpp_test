@@ -33,14 +33,15 @@ DECLARE_bool(auto_test);
 int main(int argc, char **argv) {
   Init::InitEnv(&argc, &argv);
 
-  int128 i = 0;
+  int128_t i = 0;
   intptr_t j = 0;
 
-  LOG(INFO) << "sizeof(int128) = " << sizeof(i) 
+  LOG(INFO) << "sizeof(int128_t) = " << sizeof(i) 
             << ": sizeof(intptr_t) = " << sizeof(j)
+            << ": sizeof(long long int) = " << sizeof(long long int)
             << std::endl;
 
-  CHECK_EQ(sizeof(i),16) << "sizeof(int128) is " << sizeof(i) << " != 16";
+  CHECK_EQ(sizeof(i),16) << "sizeof(int128_t) is " << sizeof(i) << " != 16";
   CHECK_EQ(sizeof(j),sizeof(long int)) 
       << "sizeof(intptr) is " << sizeof(j) 
       << " != sizeof(long int) is " << sizeof(long int);

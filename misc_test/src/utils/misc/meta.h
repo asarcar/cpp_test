@@ -25,6 +25,7 @@
 
 // C++ Standard Headers
 #include <iostream>
+#include <limits>           // std::numeric_limits
 #include <functional>       // std::function, std::_Placeholder<N>
 #include <type_traits>
 #include <utility>          // std::pair
@@ -35,8 +36,66 @@
 // Local Headers
 #include "utils/basic/basictypes.h"
 
-//! @addtogroup utils
-//! @{
+//
+// 128 bit integer is not added to standard
+// Adding some trait expressions to handle 128 bits
+//
+namespace std {
+//-----------------------------------------------------------------------------
+
+//
+// IsArithmetic which derives from IsIntegralType:
+// GCC 4.8 already supports __int128 but only 
+// when !defined(__STRICT_ANSI__) && defined(_GLIBCXX_USE_INT128)
+//
+template<>
+struct __is_integral_helper<asarcar::int128_t>
+    : public true_type { };
+
+template<>
+struct __is_integral_helper<asarcar::uint128_t>
+    : public true_type { };
+
+// Hash: Default function object used by many containers: e.g. ordered_set
+template <>
+struct hash<asarcar::int128_t> {
+  size_t operator() (asarcar::int128_t value) const {
+    return (value & std::numeric_limits<uint64_t>::max()) ^ (value >> 64);
+  }
+};  
+
+template <>
+struct hash<asarcar::uint128_t> {
+  size_t operator() (asarcar::uint128_t value) const {
+    return (value & std::numeric_limits<uint64_t>::max()) ^ (value >> 64);
+  }
+};  
+
+// numeric_limits
+template <>
+struct numeric_limits<asarcar::int128_t> {
+  static constexpr asarcar::int128_t min() noexcept {
+    return (asarcar::int128_t(numeric_limits<int64_t>::min())) << 64;
+  }
+  static constexpr asarcar::int128_t max() noexcept {
+    return ((asarcar::int128_t(numeric_limits<int64_t>::max())) << 64) |
+        numeric_limits<int64_t>::max();
+  }
+};
+
+template <>
+struct numeric_limits<asarcar::uint128_t> {
+  static constexpr asarcar::uint128_t min() noexcept {
+    return 0;
+  }
+  static constexpr asarcar::uint128_t max() noexcept {
+    return ((asarcar::uint128_t(numeric_limits<uint64_t>::max())) << 64) |
+        numeric_limits<uint64_t>::max();
+  }
+};
+
+//-----------------------------------------------------------------------------
+} // namespace std
 
 //! Namespace used for all miscellaneous utility routines
 namespace asarcar { namespace utils { namespace misc {
