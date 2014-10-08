@@ -73,9 +73,22 @@ export CCACHE_DIR := $(BUILD_DIR)/.ccache
 CUSTOM_PATH ?= $(PATH)
 
 #------------------------------------------------------------------------
+current: prepare_build_dir
+	$(MAKE) -C $(BUILD_DIR)
+
+test: prepare_build_dir
+	$(MAKE) -C $(BUILD_DIR) test
+
+allclean: 
+	echo Removing $(BP_DIR)
+	/bin/rm -rf $(BP_DIR)
+
+localclean:
+	echo Removing $(BUILD_DIR)
+	/bin/rm -rf $(BUILD_DIR)
+
 prepare_build_dir: emit_build_info
-	cd $(BUILD_DIR)
-	$(CMAKE) $(CMAKE_ARGS) $(SRCDIR)
+	(cd $(BUILD_DIR); $(CMAKE) $(CMAKE_ARGS) $(SRCDIR))
 
 emit_build_info: create_build_dir
 	echo \"$(BUILD_VERSION)\" > $(BUILD_DIR)/build_version.txt.tmp
@@ -100,19 +113,5 @@ emit_build_info: create_build_dir
 create_build_dir:
 	/bin/mkdir -p $(BUILD_DIR)
 
-test: prepare_build_dir
-	$(MAKE) -C $(BUILD_DIR) test
-
-allclean: 
-	echo Removing $(BP_DIR)
-	/bin/rm -rf $(BP_DIR)
-
-localclean:
-	echo Removing $(BUILD_DIR)
-	/bin/rm -rf $(BUILD_DIR)
-
-.DEFAULT:
-	$(MAKE) -C $(BUILD_DIR) $@
-
-.PHONY: prepare_build_dir emit_build_info create_build_dir                 \
-        allclean localclean heapcheck test
+.PHONY: current test heapcheck allclean localclean                          \
+        prepare_build_dir emit_build_info create_build_dir
