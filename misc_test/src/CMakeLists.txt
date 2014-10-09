@@ -16,29 +16,23 @@
 
 cmake_minimum_required(VERSION 2.8)
 
-project (CPP_TEST)
+project (CPP_MISC_TEST)
 
 ###################################################
 #         Global Debug Settings                   #
 ###################################################
-set(CMAKE_BUILD_TYPE Debug)
-message("CMAKE_BUILD_TYPE is ${CMAKE_BUILD_TYPE}")
-set(CMAKE_VERBOSE_MAKEFILE ON)
-message("CMAKE_VERBOSE_MAKEFILE is ${CMAKE_VERBOSE_MAKEFILE}")
-set(CMAKE_CUSTOM_BUILD_DOCUMENTATION ON)
-message("CMAKE_CUSTOM_BUILD_DOCUMENTATION is ${CMAKE_BUILD_DOCUMENTATION}")
-set(CMAKE_CUSTOM_DASHBOARD_SCRIPTING ON)
-message("CMAKE_CUSTOM_DASHBOARD_SCRIPTING is ${CMAKE_CUSTOM_DASHBOARD_SCRIPTING}")
-set(CMAKE_CUSTOM_UNIT_TESTS ON)
-message("CMAKE_CUSTOM_UNIT_TESTS is ${CMAKE_CUSTOM_UNIT_TESTS}")
+# message("CMAKE_BUILD_TYPE is ${CMAKE_BUILD_TYPE}")
+# message("CMAKE_VERBOSE_MAKEFILE is ${CMAKE_VERBOSE_MAKEFILE}")
+# message("CMAKE_CUSTOM_BUILD_DOCUMENTATION is ${CMAKE_CUSTOM_BUILD_DOCUMENTATION}")
+# message("CMAKE_CUSTOM_DASHBOARD_SCRIPTING is ${CMAKE_CUSTOM_DASHBOARD_SCRIPTING}")
+# message("CMAKE_CUSTOM_UNIT_TESTS is ${CMAKE_CUSTOM_UNIT_TESTS}")
 
 #######################################################
 #                Directory Settings                   #
 #######################################################
-get_filename_component(CMAKE_BASE_DIR ${CMAKE_SOURCE_DIR}/.. ABSOLUTE)
-set(CMAKE_SRC_DIR ${CMAKE_SOURCE_DIR})
-set(CMAKE_BIN_DIR ${CMAKE_BASE_DIR}/bin)
-set(CMAKE_DOC_DIR ${CMAKE_BASE_DIR}/doc)
+# message("CMAKE_SOURCE_DIR is ${CMAKE_SOURCE_DIR}")
+# message("CMAKE_BIN_DIR is ${CMAKE_BIN_DIR}")
+# message("CMAKE_DOC_DIR is ${CMAKE_DOC_DIR}")
 
 ###############################################
 #                Build settings               #

@@ -1,0 +1,86 @@
+CMAKE_ARGS += -D CMAKE_SOURCE_DIR:STRING="$(SRCDIR)"
+
+#
+# Set distcc related information
+#
+ifeq ($(DISTCC_DISABLE),)
+  export CCACHE_PREFIX=distcc
+  ifeq ($(DISTCC_HOSTS),)
+    export DISTCC_HOSTS = localhost
+  endif
+endif
+
+# Set the Makefile binaries
+CMAKE := /usr/bin/cmake
+MAKE  := /usr/bin/make
+
+# Set Temporary Path we use for builds
+TMP_BUILD_PATH ?= /home/$(USER)/tmp
+
+# Allows user to custom edit and tweak the build defaults.
+# wildcard: Matches argument pattern including wildcard characters.
+ifneq ($(wildcard $(SRCDIR)/Makefile.custom),)
+  include $(SRCDIR)/Makefile.custom
+endif
+
+# Var ?= value: Setting of a variable only if it doesn't have a value
+BUILD_TYPE ?= Release
+CMAKE_ARGS += -D CMAKE_BUILD_TYPE:STRING="$(BUILD_TYPE)"
+
+# Ensure default behavior is silent
+ifeq ($(VERBOSE),)
+  MAKEFLAGS += -s
+  CMAKE_ARGS += -D CMAKE_VERBOSE_MAKEFILE:BOOLEAN=0
+else
+  CMAKE_ARGS += -D CMAKE_VERBOSE_MAKEFILE:BOOLEAN=$(VERBOSE)
+endif
+
+BUILD_DOCS ?= 1
+CMAKE_ARGS += -D CMAKE_CUSTOM_BUILD_DOCUMENTATION:BOOLEAN=$(BUILD_DOCS)
+
+DASH_SCRIPTS ?= 1
+CMAKE_ARGS += -D CMAKE_CUSTOM_DASHBOARD_SCRIPTING:BOOLEAN=$(DASH_SCRIPTS)
+
+BUILD_TESTS ?= 1
+CMAKE_ARGS += -D CMAKE_CUSTOM_UNIT_TESTS:BOOLEAN=$(BUILD_TESTS)
+
+# Have separate build directory for every git branch
+GIT_BRANCH := $(notdir $(shell git symbolic-ref HEAD))
+GIT_SHA_HASH := $(shell git rev-parse HEAD)
+
+BASE_DIR := $(abspath $(SRCDIR)/..)
+
+# Extracts all but the directory-part of each file name in names
+BUILD_DIR_NAME := build
+DOC_DIR_NAME   := doc
+BIN_DIR_NAME   := bin
+
+# Create a directory based on TMP_BUILD_PATH
+# If that fails then create a directory locally
+GEN_DIR := $(BASE_DIR)/gens
+GEN_DIR := $(shell                                                           \
+             if /bin/mkdir -p $(TMP_BUILD_PATH)$(GEN_DIR) 2>/dev/null ;then  \
+               echo $(TMP_BUILD_PATH)$(GEN_DIR)                              \
+             ;else                                                           \
+               echo $(GEN_DIR)                                               \
+             ;fi)
+GEN_DIR := $(abspath $(GEN_DIR))
+BP_DIR  := $(GEN_DIR)/$(GIT_BRANCH)-$(BUILD_TYPE)
+
+BUILD_DIR := $(BP_DIR)/$(BUILD_DIR_NAME)
+
+BIN_DIR   := $(BP_DIR)/$(BIN_DIR_NAME)
+CMAKE_ARGS += -D CMAKE_BIN_DIR:STRING="$(BIN_DIR)"
+
+DOC_DIR   := $(BP_DIR)/$(DOC_DIR_NAME)
+CMAKE_ARGS += -D CMAKE_DOC_DIR:STRING="$(DOC_DIR)"
+
+# Compute the build version.
+export BUILD_VERSION := $(BUILD_TYPE)-$(GIT_BRANCH)-$(GIT_SHA_HASH)
+
+# Figure out the date when the last commit was made in the build.
+export BUILD_LAST_COMMIT_DATE := $(shell git log -1 --pretty=format:'%ci')
+
+# Any ccache output goes under BUILD_DIR so that
+# we have different ccache output for every git branch
+export CCACHE_DIR := $(BUILD_DIR)/.ccache

@@ -1,0 +1,48 @@
+current: prepare_build_dir
+	$(MAKE) -C $(BUILD_DIR)
+
+test: prepare_build_dir	
+	$(MAKE) -C $(BUILD_DIR) test
+
+doc: prepare_build_dir
+	$(MAKE) -C $(BUILD_DIR) doc
+
+ctest: prepare_build_dir
+	(cd $(BUILD_DIR); ctest -D Experimental)
+
+allclean: 
+	echo Remove $(GEN_DIR)
+	/bin/rm -rf $(GEN_DIR)
+
+localclean:
+	echo Remove $(BP_DIR)
+	/bin/rm -rf $(BP_DIR)
+
+prepare_build_dir: emit_build_info
+	(cd $(BUILD_DIR); $(CMAKE) $(CMAKE_ARGS) $(SRCDIR))
+
+emit_build_info: create_build_dir
+	echo \"$(BUILD_VERSION)\" > $(BUILD_DIR)/build_version.txt.tmp
+	if /usr/bin/diff -Nq $(BUILD_DIR)/build_version.txt                 \
+	     $(BUILD_DIR)/build_version.txt.tmp > /dev/null 2>&1 ;then      \
+          /bin/rm -f $(BUILD_DIR)/build_version.txt.tmp                     \
+        ;else                                                               \
+          /bin/mv $(BUILD_DIR)/build_version.txt.tmp                        \
+            $(BUILD_DIR)/build_version.txt                                  \
+        ;fi
+	echo \"$(BUILD_LAST_COMMIT_DATE)\" >                                \
+          $(BUILD_DIR)/build_last_commit_date.txt.tmp
+	if /usr/bin/diff -Nq $(BUILD_DIR)/build_last_commit_date.txt        \
+	       $(BUILD_DIR)/build_last_commit_date.txt.tmp >                \
+               /dev/null 2>&1 ;then                                         \
+          /bin/rm -f $(BUILD_DIR)/build_last_commit_date.txt.tmp            \
+        ;else                                                               \
+          /bin/mv $(BUILD_DIR)/build_last_commit_date.txt.tmp               \
+            $(BUILD_DIR)/build_last_commit_date.txt                         \
+        ;fi
+
+create_build_dir:
+	/bin/mkdir -p $(BUILD_DIR)
+
+.PHONY: current test doc cdash heapcheck allclean localclean                \
+        prepare_build_dir emit_build_info create_build_dir
