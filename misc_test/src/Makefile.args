@@ -14,12 +14,6 @@ ifeq ($(DISTCC_DISABLE),)
   endif
 endif
 
-# Allows user to custom edit and tweak the build defaults.
-# wildcard: Matches argument pattern including wildcard characters.
-ifneq ($(wildcard $(SRCDIR)/Makefile.custom),)
-  include $(SRCDIR)/Makefile.custom
-endif
-
 # Var ?= value: Setting of a variable only if it doesn't have a value
 BUILD_TYPE ?= Release
 CMAKE_ARGS += -D CMAKE_BUILD_TYPE:STRING="$(BUILD_TYPE)"
@@ -27,7 +21,7 @@ CMAKE_ARGS += -D CMAKE_BUILD_TYPE:STRING="$(BUILD_TYPE)"
 # Ensure default behavior is silent
 ifeq ($(VERBOSE),)
   MAKEFLAGS += -s
-  CMAKE_ARGS += -D CMAKE_VERBOSE_MAKEFILE:BOOLEAN=OFF
+  CMAKE_ARGS += -D CMAKE_VERBOSE_MAKEFILE:BOOLEAN=0
 else
   CMAKE_ARGS += -D CMAKE_VERBOSE_MAKEFILE:BOOLEAN=$(VERBOSE)
 endif
@@ -39,17 +33,13 @@ else
 CMAKE_ARGS += -D CMAKE_CUSTOM_BUILD_DOCUMENTATION:BOOLEAN=1
 endif
 
-DISABLE_BUILD_TESTS ?= 0
-ifeq ($(DISABLE_BUILD_TESTS), 1)
-CMAKE_ARGS += -D CMAKE_CUSTOM_UNIT_TESTS:BOOLEAN=0
-else
-CMAKE_ARGS += -D CMAKE_CUSTOM_UNIT_TESTS:BOOLEAN=1
-endif
-
 # Don't honor DASH_SCRIPTS if DISABLE_BUILD_TESTS is SET
+DISABLE_BUILD_TESTS ?= 0
 ifeq ($(DISABLE_BUILD_TESTS), 1) 
+  CMAKE_ARGS += -D CMAKE_CUSTOM_UNIT_TESTS:BOOLEAN=0
   DASH_SCRIPTS = 0
 else
+  CMAKE_ARGS += -D CMAKE_CUSTOM_UNIT_TESTS:BOOLEAN=1
   DASH_SCRIPTS ?= 1
 endif
 CMAKE_ARGS += -D CMAKE_CUSTOM_DASHBOARD_SCRIPTING:BOOLEAN=$(DASH_SCRIPTS)
@@ -77,6 +67,7 @@ GEN_DIR := $(shell                                                           \
              ;else                                                           \
                echo $(BASE_DIR)/$(GEN_DIR_NAME)                              \
              ;fi)
+
 GEN_DIR := $(abspath $(GEN_DIR))
 BP_DIR  := $(GEN_DIR)/$(GIT_BRANCH)-$(BUILD_TYPE)
 

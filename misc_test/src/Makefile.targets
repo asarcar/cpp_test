@@ -44,7 +44,6 @@ localclean:
 	/bin/rm -rf $(BP_DIR)
 
 prepare_build_dir: emit_build_info
-	@echo MAKEFLAGS = ${MAKEFLAGS} CMAKE_ARGS = ${CMAKE_ARGS}
 	(cd $(BUILD_DIR); $(CMAKE) $(CMAKE_ARGS) $(SRCDIR))
 
 emit_build_info: create_build_dir
@@ -72,7 +71,7 @@ create_build_dir:
 
 # .PHONY: run recipe unconditionally, regardless of whether a 
 # file with that name exists or what its last-modification time
-.PHONY: current test doc cdash heapcheck allclean localclean                \
+.PHONY: current test doc cdash profile allclean localclean                  \
         prepare_build_dir emit_build_info create_build_dir
 
 # .DEFAULT: target for which no rules are found (explicit/implicit). 
