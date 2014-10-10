@@ -16,29 +16,24 @@
 
 cmake_minimum_required(VERSION 2.8)
 
-project (CPP_TEST)
+project (CPP_MISC_TEST)
 
 ###################################################
 #         Global Debug Settings                   #
 ###################################################
-set(CMAKE_BUILD_TYPE Debug)
-message("CMAKE_BUILD_TYPE is ${CMAKE_BUILD_TYPE}")
-set(CMAKE_VERBOSE_MAKEFILE ON)
-message("CMAKE_VERBOSE_MAKEFILE is ${CMAKE_VERBOSE_MAKEFILE}")
-set(CMAKE_CUSTOM_BUILD_DOCUMENTATION ON)
-message("CMAKE_CUSTOM_BUILD_DOCUMENTATION is ${CMAKE_BUILD_DOCUMENTATION}")
-set(CMAKE_CUSTOM_DASHBOARD_SCRIPTING ON)
-message("CMAKE_CUSTOM_DASHBOARD_SCRIPTING is ${CMAKE_CUSTOM_DASHBOARD_SCRIPTING}")
-set(CMAKE_CUSTOM_UNIT_TESTS ON)
-message("CMAKE_CUSTOM_UNIT_TESTS is ${CMAKE_CUSTOM_UNIT_TESTS}")
+# message("CMAKE_BUILD_TYPE is ${CMAKE_BUILD_TYPE}")
+# message("CMAKE_VERBOSE_MAKEFILE is ${CMAKE_VERBOSE_MAKEFILE}")
+# message("CMAKE_CUSTOM_BUILD_DOCUMENTATION is ${CMAKE_CUSTOM_BUILD_DOCUMENTATION}")
+# message("CMAKE_CUSTOM_DASHBOARD_SCRIPTING is ${CMAKE_CUSTOM_DASHBOARD_SCRIPTING}")
+# message("CMAKE_CUSTOM_UNIT_TESTS is ${CMAKE_CUSTOM_UNIT_TESTS}")
 
 #######################################################
 #                Directory Settings                   #
 #######################################################
-get_filename_component(CMAKE_BASE_DIR ${CMAKE_SOURCE_DIR}/.. ABSOLUTE)
-set(CMAKE_SRC_DIR ${CMAKE_SOURCE_DIR})
-set(CMAKE_BIN_DIR ${CMAKE_BASE_DIR}/bin)
-set(CMAKE_DOC_DIR ${CMAKE_BASE_DIR}/doc)
+# message("CMAKE_SOURCE_DIR is ${CMAKE_SOURCE_DIR}")
+# message("CMAKE_TEST_OP_DIR is ${CMAKE_TEST_OP_DIR}")
+# message("CMAKE_BIN_DIR is ${CMAKE_BIN_DIR}")
+# message("CMAKE_DOC_DIR is ${CMAKE_DOC_DIR}")
 
 ###############################################
 #                Build settings               #
@@ -67,6 +62,13 @@ else (CMAKE_BUILD_TYPE STREQUAL Debug)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DFASSERT_REACTION_LEVEL=2")
   set(BUILD_POSTFIX "")
 endif (CMAKE_BUILD_TYPE STREQUAL Debug)
+
+###############################################
+#                Build settings               #
+###############################################
+if (CMAKE_CUSTOM_DISABLE_GOOGLE_PERFTOOLS)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDISABLE_GOOGLE_PERFTOOLS=1") 
+endif (CMAKE_CUSTOM_DISABLE_GOOGLE_PERFTOOLS)
 
 ######################################################
 #         C/C++ Complier related settings            #
@@ -151,10 +153,11 @@ include_directories(${CMAKE_SOURCE_DIR})
 #######################################
 if (CMAKE_CUSTOM_DASHBOARD_SCRIPTING)
   include (CTest)   
+  # message("CDash and Test Enabled")
 else (CMAKE_CUSTOM_DASHBOARD_SCRIPTING)
   if (CMAKE_CUSTOM_UNIT_TESTS)
     enable_testing()
-    message("CTest Enabled")
+    # message("CTest Enabled")
   endif (CMAKE_CUSTOM_UNIT_TESTS)
 endif (CMAKE_CUSTOM_DASHBOARD_SCRIPTING)
 
@@ -162,10 +165,14 @@ endif (CMAKE_CUSTOM_DASHBOARD_SCRIPTING)
 #          Functions         #
 ##############################
 function(register_test test_name)
+  # Test Dump Director: same relative path wrt to the base directory.
+  file(RELATIVE_PATH rel_path ${CMAKE_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR})
+  set(test_op_dir ${CMAKE_TEST_OP_DIR}/${rel_path}/${test_name})
+
+  set(test_command "/bin/mkdir -p ${test_op_dir} && ")
   set(test_command 
-      "${test_command} ${CMAKE_CURRENT_BINARY_DIR}/${test_name}${BUILD_POSTFIX}")
-  set(test_command 
-      "${test_command} --auto_test=true")    
+    "${test_command} ${CMAKE_CURRENT_BINARY_DIR}/${test_name}${BUILD_POSTFIX}")
+  set(test_command "${test_command} --auto_test=true")    
 
   # We support optional arguments to this function - they'll all be passed on
   # to the test.
@@ -178,8 +185,7 @@ function(register_test test_name)
 
   # Set the test timeout and environment.
   set(test_env "SOURCE_DIR=${CMAKE_SOURCE_DIR}")
-
-  set(test_env "${test_env};HEAPCHECK_DUMP_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}")
+  set(test_env "${test_env};HEAPCHECK_DUMP_DIRECTORY=${test_op_dir}")
   set(test_env "${test_env};PPROF_PATH=/usr/bin/google-pprof")
 
   # HeapProfiler and CPUProfiler: Not enabled in tests: however the executables
@@ -187,15 +193,13 @@ function(register_test test_name)
   # Beware of a linker issue in g++ that may require to use LD_PRELOAD to 
   # ensure CPU profiler works.
   # > env LD_PRELOAD=/path/to/libprofiler.so env CPUPROFILE=myctest.cprof ./myctest ...
-  #
-  # set(heap_prof_name "${CMAKE_CURRENT_BINARY_DIR}/${test_name}${BUILD_POSTFIX}.hprof")
-  # set(test_env "${test_env};HEAPPROFILE=${heap_prof_name}")
-  # set(cpu_prof_name "${CMAKE_CURRENT_BINARY_DIR}/${test_name}${BUILD_POSTFIX}.cprof")
-  # set(test_env "${test_env};CPUPROFILE=${cpu_prof_name}")
-  #
+  set(heap_prof_name "${test_op_dir}/${test_name}${BUILD_POSTFIX}.hprof")
+  set(test_env "${test_env};HEAPPROFILE=${heap_prof_name}")
+  set(cpu_prof_name "${test_op_dir}/${test_name}${BUILD_POSTFIX}.cprof")
+  set(test_env "${test_env};CPUPROFILE=${cpu_prof_name}")
 
-  set(test_env "${test_env};TEST_OUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}")
-
+  set(test_env "${test_env};TEST_OUTPUT_DIR=${test_op_dir}")
+  # message("<test_env test_command> is <${test_env} ${test_command}>")
   set_tests_properties(${test_name} PROPERTIES TIMEOUT 45
                        ENVIRONMENT "${test_env}")
   set_property(TARGET ${test_name} 

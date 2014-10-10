@@ -1,0 +1,81 @@
+current: prepare_build_dir
+	$(MAKE) -C $(BUILD_DIR)
+
+# Run cmake test only if DISABLE_BUILD_TESTS is UNSET
+ifeq   ($(DISABLE_BUILD_TESTS), 0)
+test: prepare_build_dir	
+	$(MAKE) -C $(BUILD_DIR) test
+else  #($(DISABLE_BUILD_TESTS), 0)
+test:
+	@echo DISABLE_BUILD_TESTS = $(DISABLE_BUILD_TESTS): unable to run test cases
+endif #($(DISABLE_BUILD_TESTS), 0)
+
+# Submit test results to my.cdash.org: DISABLE_BUILD_TESTS if UNSET and DASH_SCRIPTS are SET
+ifeq   ($(DASH_SCRIPTS), 1)
+cdash: test
+	(cd $(BUILD_DIR); ctest -D Experimental)
+else  #($(DASH_SCRIPTS), 1)
+cdash:
+	@echo {DISABLE_BUILD_TESTS, DASH_SCRIPTS} = {$(DISABLE_BUILD_TESTS), $(DASH_SCRIPTS)}: set to {0, 1} to build test cases and submit to dashboard
+endif #($(DASH_SCRIPTS), 1)
+
+ifeq   ($(DISABLE_BUILD_DOCS), 0)
+doc: prepare_build_dir
+	$(MAKE) -C $(BUILD_DIR) doc
+else  #($(DISABLE_BUILD_DOCS), 0)
+doc: 
+	@echo DISABLE_BUILD_DOCS = $(DISABLE_BUILD_DOCS): unable to generate docs
+endif #($(DISABLE_BUILD_DOCS), 0)
+
+ifeq   ($(DISABLE_GOOGLE_PERFTOOLS), 0)
+profile: prepare_build_dir
+	HEAPCHECK=normal $(MAKE) -C $(BUILD_DIR) test
+else  #($(DISABLE_GOOGLE_PERFTOOLS), 0)
+profile: 
+	@echo DISABLE_GOOGLE_PERFTOOLS = $(DISABLE_GOOGLE_PERFTOOLS): unable to profile
+endif #($(DISABLE_GOOGLE_PERFTOOLS), 0)
+
+allclean: 
+	@echo Remove $(GEN_DIR)
+	/bin/rm -rf $(GEN_DIR)
+
+localclean:
+	@echo Remove $(BP_DIR)
+	/bin/rm -rf $(BP_DIR)
+
+prepare_build_dir: emit_build_info
+	@echo MAKEFLAGS = ${MAKEFLAGS} CMAKE_ARGS = ${CMAKE_ARGS}
+	(cd $(BUILD_DIR); $(CMAKE) $(CMAKE_ARGS) $(SRCDIR))
+
+emit_build_info: create_build_dir
+	echo \"$(BUILD_VERSION)\" > $(BUILD_DIR)/build_version.txt.tmp
+	if /usr/bin/diff -Nq $(BUILD_DIR)/build_version.txt                 \
+	     $(BUILD_DIR)/build_version.txt.tmp > /dev/null 2>&1 ;then      \
+          /bin/rm -f $(BUILD_DIR)/build_version.txt.tmp                     \
+        ;else                                                               \
+          /bin/mv $(BUILD_DIR)/build_version.txt.tmp                        \
+            $(BUILD_DIR)/build_version.txt                                  \
+        ;fi
+	echo \"$(BUILD_LAST_COMMIT_DATE)\" >                                \
+          $(BUILD_DIR)/build_last_commit_date.txt.tmp
+	if /usr/bin/diff -Nq $(BUILD_DIR)/build_last_commit_date.txt        \
+	       $(BUILD_DIR)/build_last_commit_date.txt.tmp >                \
+               /dev/null 2>&1 ;then                                         \
+          /bin/rm -f $(BUILD_DIR)/build_last_commit_date.txt.tmp            \
+        ;else                                                               \
+          /bin/mv $(BUILD_DIR)/build_last_commit_date.txt.tmp               \
+            $(BUILD_DIR)/build_last_commit_date.txt                         \
+        ;fi
+
+create_build_dir:
+	/bin/mkdir -p $(BUILD_DIR)
+
+# .PHONY: run recipe unconditionally, regardless of whether a 
+# file with that name exists or what its last-modification time
+.PHONY: current test doc cdash heapcheck allclean localclean                \
+        prepare_build_dir emit_build_info create_build_dir
+
+# .DEFAULT: target for which no rules are found (explicit/implicit). 
+# If a .DEFAULT recipe is specified, every file mentioned as prerequisite, 
+# (but not as target) in a rule, will have that recipe executed on its behalf.
+.DEFAULT:

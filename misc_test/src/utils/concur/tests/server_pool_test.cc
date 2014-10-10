@@ -307,7 +307,7 @@ uint32_t parse_args(int argc, char *argv[]) {
   // Parse Arguments...
   if (argc == 1)
     return ServerThreadPoolTest::DEF_SIZ;
-  int s;
+  int s=0;
   if (argc >= 2)
     s = std::stoi(std::string(argv[1]));
   if ((s <= 0) || (argc > 2)) {

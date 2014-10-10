@@ -15,7 +15,25 @@
 # Author: Arijit Sarcar <sarcar_a@yahoo.com>
 
 add_library(basic_utils init.cc mem_block.cc)
-target_link_libraries(basic_utils gflags glog profiler tcmalloc)
+target_link_libraries(basic_utils gflags glog) 
+
+# 1. heap-checker: Comes when you link with tcmalloc
+# 2. cpu profiler: Comes when you link with profiler. 
+# Note: Linking with tcmalloc or profiler does not 
+# turn on heapcheck or CPU Profiling. It just inserts
+# the code. As such, it's practical to just always link.
+if (CMAKE_CUSTOM_DISABLE_GOOGLE_PERFTOOLS)
+  # message("Google Profiler: Disabled")
+else (CMAKE_CUSTOM_DISABLE_GOOGLE_PERFTOOLS)
+  # message("Google Profiler: Enabled")
+  target_link_libraries(basic_utils profiler)
+  if (CMAKE_CUSTOM_BUILD_TYPE STREQUAL "Debug")
+    target_link_libraries(basic_utils tcmalloc_debug)
+  else (CMAKE_CUSTOM_BUILD_TYPE STREQUAL "Debug")
+    target_link_libraries(basic_utils tcmalloc)
+  endif (CMAKE_CUSTOM_BUILD_TYPE STREQUAL "Debug")
+endif (CMAKE_CUSTOM_DISABLE_GOOGLE_PERFTOOLS)
+
 
 ######################################
 #           SubDirectories           #

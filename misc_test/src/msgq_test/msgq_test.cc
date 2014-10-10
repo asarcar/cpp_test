@@ -133,7 +133,7 @@ MsgQTest::MsgQTest(int argc, char **argv) {
   if (argc == 1) {
     _siz = DEF_SIZ;
   } else {
-    int32_t s;
+    int32_t s=0;
     if (argc >= 2)
       s = std::stoi(std::string(argv[1]));
     if ((s < 0) || (argc > 2)) {
