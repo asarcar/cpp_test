@@ -27,7 +27,7 @@
 #include <iostream>
 #include <limits>           // std::numeric_limits
 #include <functional>       // std::function, std::_Placeholder<N>
-#include <type_traits>
+#include <type_traits>      // std::false_type, std::true_type, ...
 #include <utility>          // std::pair
 
 // C Standard Headers
@@ -35,67 +35,6 @@
 #include <glog/logging.h>   // Daemon Log function
 // Local Headers
 #include "utils/basic/basictypes.h"
-
-//
-// 128 bit integer is not added to standard
-// Adding some trait expressions to handle 128 bits
-//
-namespace std {
-//-----------------------------------------------------------------------------
-
-//
-// IsArithmetic which derives from IsIntegralType:
-// GCC 4.8 already supports __int128 but only 
-// when !defined(__STRICT_ANSI__) && defined(_GLIBCXX_USE_INT128)
-//
-template<>
-struct __is_integral_helper<asarcar::int128_t>
-    : public true_type { };
-
-template<>
-struct __is_integral_helper<asarcar::uint128_t>
-    : public true_type { };
-
-// Hash: Default function object used by many containers: e.g. ordered_set
-template <>
-struct hash<asarcar::int128_t> {
-  size_t operator() (asarcar::int128_t value) const {
-    return (value & std::numeric_limits<uint64_t>::max()) ^ (value >> 64);
-  }
-};  
-
-template <>
-struct hash<asarcar::uint128_t> {
-  size_t operator() (asarcar::uint128_t value) const {
-    return (value & std::numeric_limits<uint64_t>::max()) ^ (value >> 64);
-  }
-};  
-
-// numeric_limits
-template <>
-struct numeric_limits<asarcar::int128_t> {
-  static constexpr asarcar::int128_t min() noexcept {
-    return (asarcar::int128_t(numeric_limits<int64_t>::min())) << 64;
-  }
-  static constexpr asarcar::int128_t max() noexcept {
-    return ((asarcar::int128_t(numeric_limits<int64_t>::max())) << 64) |
-        numeric_limits<int64_t>::max();
-  }
-};
-
-template <>
-struct numeric_limits<asarcar::uint128_t> {
-  static constexpr asarcar::uint128_t min() noexcept {
-    return 0;
-  }
-  static constexpr asarcar::uint128_t max() noexcept {
-    return ((asarcar::uint128_t(numeric_limits<uint64_t>::max())) << 64) |
-        numeric_limits<uint64_t>::max();
-  }
-};
-
-//-----------------------------------------------------------------------------
-} // namespace std
 
 //! Namespace used for all miscellaneous utility routines
 namespace asarcar { namespace utils { namespace misc {
@@ -120,6 +59,10 @@ constexpr bool IsSame(void) { return std::is_same<T,U>::value; }
 //! @brief is_integral wrapper: integer types (bool, char, int, long long, ...)
 template <typename T>
 constexpr bool IsIntegral(void) { return std::is_integral<T>::value; }
+
+//! @brief is_base_of wrapper
+template <typename Base, typename Derived>
+constexpr bool IsBaseOf(void) { return std::is_base_of<Base,Derived>::value; }
 
 //! @brief is_arithmetic wrapper: integer or floating point types
 template <typename T>
@@ -171,6 +114,35 @@ constexpr bool Any(bool b) {
 // NOT
 constexpr bool Not(bool b) {
   return !b;
+}
+
+//! @brief  Down Cast: 
+//! @detail Dynamic Cast incurs overhead of RTTI (Run Time Type Identification) 
+//!         at runtime - a C++ specialization type introspection
+//!         down_cast avoids RTTI: efficient version of dynamic_cast
+//!         Note dynamic_cast, base and derived classes must be polymorphic 
+//!         and derived must derive base publicly. We are circumventing 
+//!         those extra checks via IsBaseOf
+template <typename Derived, typename Base>
+inline EnableIf<IsBaseOf<Base,Derived>(), Derived*> 
+down_cast(Base* base_p) { 
+#ifdef NDEBUG
+  return static_cast<Derived *>(base_p); 
+#else
+  return dynamic_cast<Derived *>(base_p);
+#endif
+}
+
+
+
+template <typename Derived, typename Base>
+inline EnableIf<IsBaseOf<Base,Derived>(), Derived&> 
+down_cast(Base& base_ref) { 
+#ifdef NDEBUG
+  return static_cast<Derived&>(base_ref); 
+#else
+  return dynamic_cast<Derived&>(base_ref);
+#endif
 }
 
 //
@@ -231,6 +203,68 @@ using NewRangeCreator=typename RangeCreator<Base+1, Num, Num, Base+Num>::type;
 
 //-----------------------------------------------------------------------------
 } } } // namespace asarcar { namespace utils { namespace misc {
+
+//
+// 128 bit integer is not added to standard
+// Adding some trait expressions to handle 128 bits
+//
+namespace std {
+//-----------------------------------------------------------------------------
+
+//
+// IsArithmetic which derives from IsIntegralType:
+// GCC 4.8 already supports __int128 but only 
+// when !defined(__STRICT_ANSI__) && defined(_GLIBCXX_USE_INT128)
+//
+template<>
+struct __is_integral_helper<asarcar::int128_t>
+    : public true_type { };
+
+template<>
+struct __is_integral_helper<asarcar::uint128_t>
+    : public true_type { };
+
+// Hash: Default function object used by many containers: e.g. ordered_set
+template <>
+struct hash<asarcar::int128_t> {
+  size_t operator() (asarcar::int128_t value) const {
+    return (value & std::numeric_limits<uint64_t>::max()) ^ (value >> 64);
+  }
+};  
+
+template <>
+struct hash<asarcar::uint128_t> {
+  size_t operator() (asarcar::uint128_t value) const {
+    return (value & std::numeric_limits<uint64_t>::max()) ^ (value >> 64);
+  }
+};  
+
+// numeric_limits
+template <>
+struct numeric_limits<asarcar::int128_t> {
+  static constexpr asarcar::int128_t min() noexcept {
+    return (asarcar::int128_t(numeric_limits<int64_t>::min())) << 64;
+  }
+  static constexpr asarcar::int128_t max() noexcept {
+    return ((asarcar::int128_t(numeric_limits<int64_t>::max())) << 64) |
+        numeric_limits<int64_t>::max();
+  }
+};
+
+template <>
+struct numeric_limits<asarcar::uint128_t> {
+  static constexpr asarcar::uint128_t min() noexcept {
+    return 0;
+  }
+  static constexpr asarcar::uint128_t max() noexcept {
+    return ((asarcar::uint128_t(numeric_limits<uint64_t>::max())) << 64) |
+        numeric_limits<uint64_t>::max();
+  }
+
+};
+
+//-----------------------------------------------------------------------------
+} // namespace std
 
 #endif // _UTILS_MISC_META_H_
 

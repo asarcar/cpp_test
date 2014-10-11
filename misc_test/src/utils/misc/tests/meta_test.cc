@@ -75,6 +75,54 @@ class MetaTester {
     }, set{numeric_limits<int128_t>::min(), numeric_limits<int128_t>::max()} {} 
   ~MetaTester(void) {}
   void Run(void) {
+    MetaClassTest();
+    FnBindTest();
+    Int128Test();
+    DownCastTest();
+    return;
+  }
+ private:
+  struct NonFundamental {
+    NonFundamental& operator+(const NonFundamental& other) {
+      for (int i=0; i<static_cast<int>(v_.size()); ++i)
+        v_[i] += other.v_[i]; 
+      return *this;
+    }
+    array<int, 4> v_;
+  };
+  using Fundamental=int;
+  
+  Fundamental               fundamental_;
+  NonFundamental            nfundamental_;
+  MetaClass<Fundamental>    mtf_;
+  MetaClass<NonFundamental> mtnf_;
+
+  using IntPair=std::pair<int,int>;
+  // Bind Arguments to Positions
+  template<typename Ret, typename... Args, int... Positions>
+  std::function<Ret(Args...)> 
+  fn_bind_arg_pos(std::function<Ret(Args...)>& fn_orig,
+                  const Range<Positions...>&   arg_pos) {
+    return std::bind(fn_orig, std::_Placeholder<Positions>()...);
+  }
+
+  template <typename Ret, typename... Args>
+  std::function<Ret(Args...)>
+  fn_bind(std::function<Ret(Args...)>& fn_orig) {
+    auto range = BasicRangeCreator<sizeof...(Args)>();
+    return fn_bind_arg_pos(fn_orig, range);
+  }
+
+  function<int(IntPair,int,int,IntPair,int)>   mul_;
+
+  unordered_set<int128_t> set;
+
+  struct B {virtual ~B(){};};
+  struct D: public B {};
+  struct D2: public B {};
+
+
+  void MetaClassTest(void) {
     LOG(INFO) << "NonFundamental: " << boolalpha << IsFundamental<NonFundamental>()
               << " Fundamental: " << IsFundamental<Fundamental>() 
               << " All(IsPod<int>, IsArithmetic<size_t>, IsFundamental<float>): "
@@ -126,13 +174,16 @@ class MetaTester {
     CHECK_EQ(mtnf_.getField().v_[1], 6);
     CHECK_EQ(mtnf_.getPtr()->v_[0], 5);
     CHECK_EQ(mtnf_.getPtr()->v_[1], 6);
-    
-
+    return;
+  }
+  void FnBindTest(void) {  
     LOG(INFO) << "FN_BIND: Test";
     auto mul2 = fn_bind(mul_);
     CHECK_EQ(mul2(std::make_pair(2,4),6,8,std::make_pair(10,12),14), (2*4*6*8*10*12*14));
+    return;
+  }
 
-
+  void Int128Test(void) {
     LOG(INFO) << "INT128: Test"; 
     CHECK_EQ(set.size(), 2);
     auto it_end = set.end();
@@ -146,45 +197,47 @@ class MetaTester {
     // Not directly invoking CHECK_EQ(*it...) as ostream header (till GCC 4.8)
     // does not deal with 128 bit overloaded stream operators << or >>
     CHECK_EQ(val, 0);
-
     return;
   }
 
- private:
-  struct NonFundamental {
-    NonFundamental& operator+(const NonFundamental& other) {
-      for (int i=0; i<static_cast<int>(v_.size()); ++i)
-        v_[i] += other.v_[i]; 
-      return *this;
-    }
-    array<int, 4> v_;
-  };
-  using Fundamental=int;
-  
-  Fundamental               fundamental_;
-  NonFundamental            nfundamental_;
-  MetaClass<Fundamental>    mtf_;
-  MetaClass<NonFundamental> mtnf_;
+  void DownCastTest(void) {
+    LOG(INFO) << "DownCast: Test"; 
+    D  d;
+    B* bd_p   = &d;
+    B& bd_ref = d;
 
-  using IntPair=std::pair<int,int>;
-  // Bind Arguments to Positions
-  template<typename Ret, typename... Args, int... Positions>
-  std::function<Ret(Args...)> 
-  fn_bind_arg_pos(std::function<Ret(Args...)>& fn_orig,
-                  const Range<Positions...>&   arg_pos) {
-    return std::bind(fn_orig, std::_Placeholder<Positions>()...);
+    D* derived_p = down_cast<D>(bd_p);
+    CHECK_EQ(derived_p, bd_p);
+    // D  *d_p   = &d;
+    // D2* d2_p = down_cast<D2>(d_p);
+    // B *base_p = down_cast<B>(d_p);
+
+    D& derived_ref = down_cast<D>(bd_ref);
+    CHECK_EQ(&derived_ref, &bd_ref);
+
+    // D& d_ref  = d;
+    // D2& d2_ref = down_cast<D2>(d_ref);
+    // B& base_ref = down_cast<B>(d_ref);
+    
+    const D  cd;
+    const B* cbd_p   = &cd;
+    const B& cbd_ref = cd;
+
+    // without down_cast<D> fails
+    const D* cderived_p = down_cast<const D>(cbd_p); 
+    CHECK_EQ(cderived_p, cbd_p);
+    cderived_p = down_cast<D>(bd_p);
+    CHECK_EQ(cderived_p, bd_p);
+
+    // without down_cast<D> fails
+    const D&  cderived_ref = down_cast<const D>(cbd_ref);
+    CHECK_EQ(&cderived_ref, &cbd_ref);
+    // cderived_ref = down_cast<D>(bd_ref);
+    const D&  cderived_ref2 = down_cast<D>(bd_ref);
+    CHECK_EQ(&cderived_ref2, &bd_ref);
+
+    return;
   }
-
-  template <typename Ret, typename... Args>
-  std::function<Ret(Args...)>
-  fn_bind(std::function<Ret(Args...)>& fn_orig) {
-    auto range = BasicRangeCreator<sizeof...(Args)>();
-    return fn_bind_arg_pos(fn_orig, range);
-  }
-
-  function<int(IntPair,int,int,IntPair,int)>   mul_;
-
-  unordered_set<int128_t> set;
 };
 
 // Flag Declarations

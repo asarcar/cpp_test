@@ -56,11 +56,19 @@ namespace asarcar {
 //! @brief    Flexible Assert to extend the assert mechanism to generic scenarios
 class FAssert {
  public:
+  //:-> numerically lower the level the more its gravity
+  enum class ReactionLevel {_fatal=0, _error=1, _warning=2};
+#if (FASSERT_REACTION_LEVEL == 0)  
+  static constexpr ReactionLevel _cur_level = ReactionLevel::_fatal;
+#elif (FASSERT_REACTION_LEVEL == 1)  
+  static constexpr ReactionLevel _cur_level = ReactionLevel::_error;
+#else // if (FASSERT_REACTION_LEVEL == 2)
+  static constexpr ReactionLevel _cur_level = ReactionLevel::_warning;
+#endif
+  static constexpr ReactionLevel _def_level = ReactionLevel::_error;
+
   // numerically higher modes more drastic modes
   enum class ReactionMode {_ignore=0, _throw=1, _terminate=2}; 
-  //:-> lower the level the more its gravity
-  enum class ReactionLevel {_fatal=0, _error=1, _warning=2};
-
 #if (FASSERT_REACTION_MODE == 0)
   static constexpr ReactionMode  _cur_mode  = ReactionMode::_ignore;
 #elif (FASSERT_REACTION_MODE == 1)
@@ -69,15 +77,6 @@ class FAssert {
   static constexpr ReactionMode  _cur_mode  = ReactionMode::_terminate;
 #endif
 
-  static constexpr ReactionLevel _def_level = ReactionLevel::_error;
-
-#if (FASSERT_REACTION_LEVEL == 0)  
-  static constexpr ReactionLevel _cur_level = ReactionLevel::_fatal;
-#elif (FASSERT_REACTION_LEVEL == 1)  
-  static constexpr ReactionLevel _cur_level = ReactionLevel::_error;
-#else // if (FASSERT_REACTION_LEVEL == 2)
-  static constexpr ReactionLevel _cur_level = ReactionLevel::_warning;
-#endif
   struct Error : std::runtime_error {
     Error(const std::string &s) : std::runtime_error{s} {}
   };
@@ -103,17 +102,15 @@ class FAssert {
     if (assert_condition == true)
       return;
     // TODO: Replace all cerr output by dumping a LOG(msg)
-    if (_cur_mode == ReactionMode::_ignore) {
-      LOG(WARNING) << "fassert failure: " << msg << ": silently ignored" << std::endl;
-      return;
-    }
-    else if (_cur_mode == ReactionMode::_terminate) {
+    if (_cur_mode == ReactionMode::_terminate) {
       LOG(ERROR) << "fassert failure: " << msg << ": terminating program" << std::endl;
       std::terminate();
-    }
-    else { 
+    } else if (_cur_mode == ReactionMode::_throw) { 
       LOG(ERROR) << "fassert failure: " << msg << ": throwing exception" << std::endl;
       throw Except{msg};
+    } else { // (_cur_mode == ReactionMode::_ignore)
+      LOG(WARNING) << "fassert failure: " << msg << ": silently ignored" << std::endl;
+      return;
     }
 
     return;

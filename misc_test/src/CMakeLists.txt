@@ -49,17 +49,17 @@ project (CPP_MISC_TEST)
 #        release ready production binaries for customers.
 if (CMAKE_BUILD_TYPE STREQUAL Debug)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g") 
-  # MODE: throw exception for every assert failure
-  # LEVEL: All assert LEVELS are honored i.e. even WARNING level assert calls
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DFASSERT_REACTION_MODE=1")
+  # LEVEL: All assert LEVELS are reacted (even including WARNINGs)
+  # MODE: LOG and throw exception for reacted assert failure
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DFASSERT_REACTION_LEVEL=2")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DFASSERT_REACTION_MODE=1")
   set(BUILD_POSTFIX "_d")
 else (CMAKE_BUILD_TYPE STREQUAL Debug)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -O3 -DNDEBUG")
-  # MODE: Ignore every assert failure and program would move on
-  # LEVEL: FATAL asserts would be logged
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DFASSERT_REACTION_MODE=0")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DFASSERT_REACTION_LEVEL=2")
+  # LEVEL: Only react to FATAL asserts
+  # MODE: LOG and Terminate for reacted assert failure
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DFASSERT_REACTION_LEVEL=0")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DFASSERT_REACTION_MODE=2")
   set(BUILD_POSTFIX "")
 endif (CMAKE_BUILD_TYPE STREQUAL Debug)
 
