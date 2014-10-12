@@ -76,6 +76,11 @@ class MemBlock {
 
   inline size_t size(void) { return size_; }
 
+  static inline Ptr 
+  Create(size_t mem_size = 0, void *data_p=nullptr, 
+         const FreeFn_f& freeFn = NullFreeFn) { 
+    return std::make_shared<MemBlock>(mem_size, data_p, freeFn);
+  }
  private:
   size_t   size_;
   union Data {

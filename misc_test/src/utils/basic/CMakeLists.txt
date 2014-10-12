@@ -14,7 +14,7 @@
 
 # Author: Arijit Sarcar <sarcar_a@yahoo.com>
 
-add_library(basic_utils init.cc mem_block.cc)
+add_library(basic_utils init.cc mem_block.cc proc_info.cc)
 target_link_libraries(basic_utils gflags glog) 
 
 # 1. heap-checker: Comes when you link with tcmalloc

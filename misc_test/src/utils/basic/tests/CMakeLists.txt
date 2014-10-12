@@ -16,5 +16,6 @@
 add_ctest_fn(fassert)
 add_ctest_fn(mem_block)
 add_ctest_fn(siz)
+add_ctest_fn(proc_info)
 
 
