@@ -25,7 +25,10 @@
 // Local Headers
 #include "utils/basic/basictypes.h"
 #include "utils/basic/init.h"
+#include "utils/misc/int128_templates.h"
+#include "utils/misc/range_bindor.h"
 #include "utils/misc/meta.h"
+#include "utils/misc/progeny_cast.h"
 
 using namespace asarcar;
 using namespace asarcar::utils;
@@ -78,7 +81,7 @@ class MetaTester {
     MetaClassTest();
     FnBindTest();
     Int128Test();
-    DownCastTest();
+    ProgenyCastTest();
     return;
   }
  private:
@@ -109,7 +112,7 @@ class MetaTester {
   template <typename Ret, typename... Args>
   std::function<Ret(Args...)>
   fn_bind(std::function<Ret(Args...)>& fn_orig) {
-    auto range = BasicRangeCreator<sizeof...(Args)>();
+    auto range = BasicRangeBindor<sizeof...(Args)>();
     return fn_bind_arg_pos(fn_orig, range);
   }
 
@@ -200,40 +203,40 @@ class MetaTester {
     return;
   }
 
-  void DownCastTest(void) {
-    LOG(INFO) << "DownCast: Test"; 
+  void ProgenyCastTest(void) {
+    LOG(INFO) << "ProgenyCast: Test"; 
     D  d;
     B* bd_p   = &d;
     B& bd_ref = d;
 
-    D* derived_p = down_cast<D>(bd_p);
+    D* derived_p = progeny_cast<D>(bd_p);
     CHECK_EQ(derived_p, bd_p);
     // D  *d_p   = &d;
-    // D2* d2_p = down_cast<D2>(d_p);
-    // B *base_p = down_cast<B>(d_p);
+    // D2* d2_p = progeny_cast<D2>(d_p);
+    // B *base_p = progeny_cast<B>(d_p);
 
-    D& derived_ref = down_cast<D>(bd_ref);
+    D& derived_ref = progeny_cast<D>(bd_ref);
     CHECK_EQ(&derived_ref, &bd_ref);
 
     // D& d_ref  = d;
-    // D2& d2_ref = down_cast<D2>(d_ref);
-    // B& base_ref = down_cast<B>(d_ref);
+    // D2& d2_ref = progeny_cast<D2>(d_ref);
+    // B& base_ref = progeny_cast<B>(d_ref);
     
     const D  cd;
     const B* cbd_p   = &cd;
     const B& cbd_ref = cd;
 
-    // without down_cast<D> fails
-    const D* cderived_p = down_cast<const D>(cbd_p); 
+    // without progeny_cast<D> fails
+    const D* cderived_p = progeny_cast<const D>(cbd_p); 
     CHECK_EQ(cderived_p, cbd_p);
-    cderived_p = down_cast<D>(bd_p);
+    cderived_p = progeny_cast<D>(bd_p);
     CHECK_EQ(cderived_p, bd_p);
 
-    // without down_cast<D> fails
-    const D&  cderived_ref = down_cast<const D>(cbd_ref);
+    // without progeny_cast<D> fails
+    const D&  cderived_ref = progeny_cast<const D>(cbd_ref);
     CHECK_EQ(&cderived_ref, &cbd_ref);
-    // cderived_ref = down_cast<D>(bd_ref);
-    const D&  cderived_ref2 = down_cast<D>(bd_ref);
+    // cderived_ref = progeny_cast<D>(bd_ref);
+    const D&  cderived_ref2 = progeny_cast<D>(bd_ref);
     CHECK_EQ(&cderived_ref2, &bd_ref);
 
     return;

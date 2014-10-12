@@ -20,6 +20,7 @@
 // C++ Standard Headers
 #include <array>            // std::array
 #include <iostream>         // std::cout
+#include <functional>       // std::function
 // C Standard Headers
 // Google Headers
 #include <gflags/gflags.h>  // Parse command line args and flags
