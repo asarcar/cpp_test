@@ -28,11 +28,9 @@
 // Local Headers
 #include "utils/basic/basictypes.h"
 #include "utils/basic/init.h"
-#include "utils/misc/meta.h"
+#include "utils/basic/meta_utils.h"
 
 using namespace asarcar;
-using namespace asarcar::utils;
-using namespace asarcar::utils::misc;
 using namespace std;
 
 static void template_test(void);

@@ -32,6 +32,7 @@
 #include <glog/logging.h>   // Daemon Log function
 // Local Headers
 #include "utils/basic/basictypes.h"
+#include "utils/basic/make_unique.h"
 
 //! Generic namespace used for all utility routines developed
 namespace asarcar {
@@ -41,8 +42,10 @@ namespace asarcar {
 //! @brief    Class that captures the memory block
 class MemBlock {
  public:
-  using Ptr      = std::shared_ptr<MemBlock>;
-  using PtrConst = std::shared_ptr<const MemBlock>;
+  using ShdPtr      = std::shared_ptr<MemBlock>;
+  using ShdPtrConst = std::shared_ptr<const MemBlock>;
+  using UnqPtr      = std::unique_ptr<MemBlock>;
+  using UnqPtrConst = std::unique_ptr<const MemBlock>;
   
   using  FreeFn_f = std::function<void(void*)>;
   static constexpr size_t MAX_MEMBLOCK_INLINE_SIZE{16};
@@ -76,11 +79,6 @@ class MemBlock {
 
   inline size_t size(void) { return size_; }
 
-  static inline Ptr 
-  Create(size_t mem_size = 0, void *data_p=nullptr, 
-         const FreeFn_f& freeFn = NullFreeFn) { 
-    return std::make_shared<MemBlock>(mem_size, data_p, freeFn);
-  }
  private:
   size_t   size_;
   union Data {

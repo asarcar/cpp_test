@@ -14,8 +14,13 @@
 
 # Author: Arijit Sarcar <sarcar_a@yahoo.com>
 add_ctest_fn(fassert)
+add_ctest_fn(int128_templates)
+add_ctest_fn(make_unique)
 add_ctest_fn(mem_block)
-add_ctest_fn(siz)
+add_ctest_fn(meta_utils)
 add_ctest_fn(proc_info)
+add_ctest_fn(progeny_cast)
+add_ctest_fn(siz)
+
 
 

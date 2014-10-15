@@ -13,8 +13,5 @@
 # limitations under the License.
 
 # Author: Arijit Sarcar <sarcar_a@yahoo.com>
-add_ctest_fn(int128_templates)
-add_ctest_fn(meta)
-add_ctest_fn(progeny_cast)
 add_ctest_fn(range_bindor)
 add_ctest_fn(udu)

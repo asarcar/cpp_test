@@ -27,13 +27,11 @@
 // Google Headers
 // Local Headers
 #include "utils/basic/basictypes.h"
-#include "utils/misc/meta.h"
+#include "utils/basic/meta_utils.h"
 
 //! Namespace used for all math utility routines developed
 namespace asarcar { namespace utils { namespace math {
 //-----------------------------------------------------------------------------
-
-namespace um = asarcar::utils::misc;
 
 //! @brief computes the overlap of two ranges: 
 //         range [base, length) is denoted by pair <first, length>
@@ -42,7 +40,7 @@ namespace um = asarcar::utils::misc;
 //! @param  [in] range2 std::pair<from_index, length>
 //! @return range std::pair<from_index, length>
 template <typename T>
-um::EnableIf<(um::IsIntegral<T>() && !um::IsSame<T, bool>()), std::pair<T,T>> 
+EnableIf<(IsIntegral<T>() && !IsSame<T, bool>()), std::pair<T,T>> 
 ComputeOverlap(const std::pair<T,T>& p1, const std::pair<T,T>& p2) {
   FASSERT(p1.second>0); FASSERT(p2.second > 0);
   auto first = std::max(p1.first, p2.first);

@@ -37,8 +37,6 @@
 namespace asarcar { namespace utils { namespace math { namespace matrix_priv {
 //-----------------------------------------------------------------------------
 
-namespace um = asarcar::utils::misc;
-
 template <typename T, size_t N>
 struct MatrixInit {
   using type = typename std::initializer_list<typename MatrixInit<T,N-1>::type>;
@@ -59,27 +57,27 @@ struct MatrixInit<T,0>; // declared but undefined to catch errors
  * specialization logic with any N and then N equal to 1
  */
 template <size_t N, typename I, typename List>
-um::EnableIf<(N==1)> DeriveExtents(I& iter, const List& list) {
+EnableIf<(N==1)> DeriveExtents(I& iter, const List& list) {
   *iter = list.size();
   return;
 }
 
 template <size_t N, typename I, typename List>
-um::EnableIf<(N>1)> DeriveExtents(I& iter, const List& list) {
+EnableIf<(N>1)> DeriveExtents(I& iter, const List& list) {
   *iter = list.size();
   DeriveExtents<(N-1)>(++iter, *list.begin());
   return;
 }
 
 template <size_t N, typename T, typename List>
-um::EnableIf<(N==1)> 
+EnableIf<(N==1)> 
 PopulateElems(std::vector<T>& vec, const List& list) {
   vec.insert(vec.end(), list.begin(), list.end());
   return;
 }
 
 template <size_t N, typename T, typename List>
-um::EnableIf<(N>1)> 
+EnableIf<(N>1)> 
 PopulateElems(std::vector<T>& vec, const List& list) {
   for(auto iter=list.begin(); iter != list.end(); ++iter)
     PopulateElems<N-1>(vec, *iter);
@@ -88,15 +86,15 @@ PopulateElems(std::vector<T>& vec, const List& list) {
 
 template <size_t N, typename... Args>
 constexpr bool IsElementRequest() {
-  return (um::All(um::IsConvertible<Args, size_t>()...) && (sizeof...(Args) == N));
+  return (All(IsConvertible<Args, size_t>()...) && (sizeof...(Args) == N));
 }
 
 template <size_t N, typename... Args>
 constexpr bool IsSliceRequest() {
-  return (um::All((um::IsConvertible<Args, size_t>() || 
-                   um::IsSame<Args, Slice>())...) &&
+  return (All((IsConvertible<Args, size_t>() || 
+               IsSame<Args, Slice>())...) &&
           // At least one Arg should be of type Slice
-          (um::Any(um::IsSame<Args, Slice>()...)) && 
+          (Any(IsSame<Args, Slice>()...)) && 
           (sizeof...(Args) <= N));
 }
 

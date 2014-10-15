@@ -25,7 +25,7 @@
 #include "utils/basic/basictypes.h"
 #include "utils/basic/fassert.h"
 #include "utils/basic/init.h"
-#include "utils/misc/meta.h"
+#include "utils/basic/meta_utils.h"
 
 namespace asarcar {
 //-----------------------------------------------------------------------------
@@ -35,8 +35,6 @@ std::string operator"" _s(const char *s, size_t len) {
 
 using DimTypeD = long double;
 using ComplexD = std::complex<DimTypeD>;
-
-using namespace asarcar::utils::misc; // IsPod
 
 constexpr ComplexD operator"" _r(DimTypeD realval) {
   static_assert(IsPod<DimTypeD>(), "DimTypeD should be a POD");

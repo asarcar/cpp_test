@@ -33,7 +33,7 @@
 // Local Headers
 #include "utils/basic/basictypes.h"
 #include "utils/basic/fassert.h"
-#include "utils/misc/meta.h"
+#include "utils/basic/meta_utils.h"
 
 //! @addtogroup utils
 //! @{
@@ -41,8 +41,6 @@
 //! Namespace used for all math utility routines developed
 namespace asarcar { namespace utils { namespace math {
 //-----------------------------------------------------------------------------
-
-namespace um = asarcar::utils::misc;
 
 // Forward Declarations
 template <int>
@@ -83,8 +81,8 @@ struct MatrixSlice {
                        const std::initializer_list<size_t>& strides);
 
   template <typename... Exts, 
-            typename = um::EnableIf<((sizeof...(Exts) == N) && 
-                                     um::All(um::IsConvertible<Exts, size_t>()...))>>
+            typename = EnableIf<((sizeof...(Exts) == N) && 
+                                 All(IsConvertible<Exts, size_t>()...))>>
       explicit MatrixSlice(Exts... exts);
 
   inline size_t size(void) { 
@@ -93,7 +91,7 @@ struct MatrixSlice {
   }
   
   template <typename... Dims,
-            typename = um::EnableIf<um::All(um::IsConvertible<Dims, size_t>()...)>>
+            typename = EnableIf<All(IsConvertible<Dims, size_t>()...)>>
   size_t operator()(Dims... dims) const;
   
   inline size_t extent(size_t index) const { return extents_.at(index); }

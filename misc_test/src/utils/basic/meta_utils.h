@@ -13,27 +13,24 @@
 // limitations under the License.
 //
 
-//! @file     meta.h
+//! @file     meta_utils.h
 //! @brief    Utilities to assist in meta programming. Taken liberally
 //            from Bjarne Stroustrup. Many wrappers will be available 
 //            by default from C++14
 
 //! @author   Arijit Sarcar <sarcar_a@yahoo.com>
 
-#ifndef _UTILS_MISC_META_H_
-#define _UTILS_MISC_META_H_
+#ifndef _UTILS_BASIC_META_UTILS_H_
+#define _UTILS_BASIC_META_UTILS_H_
 
 // C++ Standard Headers
 #include <iostream>
-
 // C Standard Headers
 // Google Headers
-#include <glog/logging.h>   // Daemon Log function
 // Local Headers
 #include "utils/basic/basictypes.h"
 
-//! Namespace used for all miscellaneous utility routines
-namespace asarcar { namespace utils { namespace misc {
+namespace asarcar { 
 //-----------------------------------------------------------------------------
 
 //! @brief conditional wrapper
@@ -112,8 +109,20 @@ constexpr bool Not(bool b) {
   return !b;
 }
 
-//-----------------------------------------------------------------------------
-} } } // namespace asarcar { namespace utils { namespace misc {
+//! @brief is_array wrapper
+template <typename T>
+constexpr bool IsArray(void) { return std::is_array<T>::value; }
 
-#endif // _UTILS_MISC_META_H_
+//! @brief extent wrapper
+template <typename T>
+constexpr size_t Extent(void) { return std::extent<T>::value; }
+
+//! @brief Remove Extent available from C++14
+template< class T >
+using RemoveExtent = typename std::remove_extent<T>::type;
+
+//-----------------------------------------------------------------------------
+} // namespace asarcar
+
+#endif // _UTILS_BASIC_META_UTILS_H_
 

@@ -22,11 +22,9 @@
 // Local Headers
 #include "utils/basic/basictypes.h"
 #include "utils/basic/init.h"
-#include "utils/misc/progeny_cast.h"
+#include "utils/basic/progeny_cast.h"
 
 using namespace asarcar;
-using namespace asarcar::utils;
-using namespace asarcar::utils::misc;
 using namespace std;
 
 class ProgenyCastTester {

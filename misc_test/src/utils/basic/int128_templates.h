@@ -19,8 +19,8 @@
 //!           via _GLIBCXX_USE_INT128
 //! @author   Arijit Sarcar <sarcar_a@yahoo.com>
 
-#ifndef _UTILS_MISC_INT128_TEMPLATES_H_
-#define _UTILS_MISC_INT128_TEMPLATES_H_
+#ifndef _UTILS_BASIC_INT128_TEMPLATES_H_
+#define _UTILS_BASIC_INT128_TEMPLATES_H_
 
 // C++ Standard Headers
 #include <iostream>
@@ -93,4 +93,4 @@ struct numeric_limits<asarcar::uint128_t> {
 //-----------------------------------------------------------------------------
 } // namespace std
 
-#endif // _UTILS_MISC_INT128_TEMPLATES_H_
+#endif // _UTILS_BASIC_INT128_TEMPLATES_H_

@@ -38,9 +38,6 @@
 namespace asarcar { namespace utils { namespace math {
 //-----------------------------------------------------------------------------
 
-
-namespace um = asarcar::utils::misc;
-
 template <typename T, size_t N>
 using MatrixInitializer = typename matrix_priv::MatrixInit<T,N>::type;
 
@@ -75,10 +72,10 @@ class Matrix {
   using const_iterator = typename std::vector<T>::const_iterator;
 
   template <typename U, 
-            typename = um::EnableIf<um::IsConvertible<T, U>()>>
+            typename = EnableIf<IsConvertible<T, U>()>>
   Matrix(const MatrixRef<U,N>&); // construct from MatrixRef
   template <typename U,
-            typename = um::EnableIf<um::IsConvertible<T, U>()>>
+            typename = EnableIf<IsConvertible<T, U>()>>
   Matrix& operator=(const MatrixRef<U,N>&); // construct from MatrixRef
 
   // construct Matrix with specific extents
@@ -105,11 +102,11 @@ class Matrix {
   const MatrixRef<T, N-1>& operator[](size_t index);
 
   template <typename... Args>
-  um::EnableIf<matrix_priv::IsElementRequest<N, Args...>(), T&>
+  EnableIf<matrix_priv::IsElementRequest<N, Args...>(), T&>
   operator()(Args... args);
       
   template <typename... Args>
-  um::EnableIf<matrix_priv::IsSliceRequest<N, Args...>(), MatrixRef<T,N>>
+  EnableIf<matrix_priv::IsSliceRequest<N, Args...>(), MatrixRef<T,N>>
   operator()(const Args&... args);
 
   std::string toString(void) const;  
@@ -123,7 +120,7 @@ class Matrix {
   template <typename FnObj>
   Matrix& apply(FnObj f); // apply f(x) for every element x
   template <typename M, typename FnObj>
-  um::EnableIf<IsMatrixType<M>(), Matrix&> 
+  EnableIf<IsMatrixType<M>(), Matrix&> 
   apply(const M&m, FnObj f); // apply f(x, Mx) for every element x, Mx
 
   // Scalar Operations
@@ -196,7 +193,7 @@ const MatrixRef<T, N-1>& Matrix<T,N>::operator[](size_t index) {
 
 template <typename T, size_t N>
 template <typename... Args>
-um::EnableIf<matrix_priv::IsElementRequest<N, Args...>(), T&>
+EnableIf<matrix_priv::IsElementRequest<N, Args...>(), T&>
 Matrix<T,N>::operator()(Args... args) {
   FASSERT(matrix_priv::AreIndicesBounded<N>(slice_.extents_, args...));
   return elems_.at(slice_(args...));
@@ -204,7 +201,7 @@ Matrix<T,N>::operator()(Args... args) {
 
 template <typename T, size_t N>
 template <typename... Args>
-um::EnableIf<matrix_priv::IsSliceRequest<N, Args...>(), MatrixRef<T,N>>
+EnableIf<matrix_priv::IsSliceRequest<N, Args...>(), MatrixRef<T,N>>
     Matrix<T,N>::operator()(const Args&... args) {
   MatrixSlice<N> new_s;
   new_s.start_ = matrix_priv::RefineSlice<N>(slice_, new_s, sizeof...(args), args...);
@@ -239,7 +236,7 @@ Matrix<T,N>& Matrix<T,N>::apply(FnObj f) {
 
 template <typename T, size_t N>
 template <typename M, typename FnObj>
-um::EnableIf<IsMatrixType<M>(), Matrix<T,N>&> 
+EnableIf<IsMatrixType<M>(), Matrix<T,N>&> 
 Matrix<T,N>::apply(const M &m, FnObj f) {
   // Make sure sizes and dimension match
   static_assert(order() == m.order(), "Mismatched order for this operation");

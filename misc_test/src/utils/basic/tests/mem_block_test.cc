@@ -36,20 +36,20 @@ class MemBlockTester {
   void Run(void) {
     // Default construction and destruction
     {
-      MemBlock::Ptr buf = MemBlock::Create();
+      MemBlock::ShdPtr buf = make_shared<MemBlock>();
       CHECK(buf->data() == nullptr);
       CHECK_EQ(buf->size(), 0);
     }
     // Size Construction
     {
-      MemBlock::Ptr buf = MemBlock::Create(MemBlock::MAX_MEMBLOCK_INLINE_SIZE);
+      MemBlock::UnqPtr buf = make_unique<MemBlock>(MemBlock::MAX_MEMBLOCK_INLINE_SIZE);
       CHECK(buf->data() != nullptr);
       CHECK_EQ(buf->size(), MemBlock::MAX_MEMBLOCK_INLINE_SIZE);
     }
     
     // Reset with Size
     {
-      MemBlock::Ptr buf = MemBlock::Create(32);
+      MemBlock::ShdPtr buf = make_shared<MemBlock>(32);
       void *data = buf->data();
       buf->Reset(MemBlock::MAX_MEMBLOCK_INLINE_SIZE);
       CHECK_EQ(buf->size(), MemBlock::MAX_MEMBLOCK_INLINE_SIZE);
@@ -60,7 +60,7 @@ class MemBlockTester {
     // 1. Validate MemBlock doesn't attempt to free memory when destructor called
     char s[] = "MemBlock assumes memory when size>threshold";
     {
-      MemBlock::Ptr buf = MemBlock::Create(8);
+      MemBlock::ShdPtr buf = make_shared<MemBlock>(8);
       buf->Reset(strlen(s), s);
       CHECK_EQ(memcmp(buf->data(), s, buf->size()), 0);
     }
@@ -73,7 +73,7 @@ class MemBlockTester {
       size_t siz = MemBlock::MAX_MEMBLOCK_INLINE_SIZE*2;
       void  *mem = malloc(siz);
       auto freeFn = [&free_call](void *p){free(p); ++free_call;};
-      MemBlock::Ptr buf = MemBlock::Create(siz, mem, freeFn);
+      MemBlock::UnqPtr buf = make_unique<MemBlock>(siz, mem, freeFn);
       size_t siz2 = MemBlock::MAX_MEMBLOCK_INLINE_SIZE*4;
       void  *mem2 = malloc(siz2);
       buf->Reset(siz2, mem2, freeFn);

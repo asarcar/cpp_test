@@ -17,8 +17,8 @@
 //! @brief    Provides efficient (non RTTI) away to cast to progeny instances
 //! @author   Arijit Sarcar <sarcar_a@yahoo.com>
 
-#ifndef _UTILS_MISC_PROGENY_CAST_H_
-#define _UTILS_MISC_PROGENY_CAST_H_
+#ifndef _UTILS_BASIC_PROGENY_CAST_H_
+#define _UTILS_BASIC_PROGENY_CAST_H_
 
 // C++ Standard Headers
 #include <iostream>
@@ -26,10 +26,9 @@
 // Google Headers
 // Local Headers
 #include "utils/basic/basictypes.h"
-#include "utils/misc/meta.h"
+#include "utils/basic/meta_utils.h"
 
-//! Namespace used for all miscellaneous utility routines
-namespace asarcar { namespace utils { namespace misc {
+namespace asarcar {
 //-----------------------------------------------------------------------------
 
 //! @brief  Progeny Cast: 
@@ -62,6 +61,6 @@ progeny_cast(Base& base_ref) {
 }
 
 //-----------------------------------------------------------------------------
-} } } // namespace asarcar { namespace utils { namespace misc {
+} // namespace asarcar
 
-#endif // _UTILS_MISC_PROGENY_CAST_H_
+#endif // _UTILS_BASIC_PROGENY_CAST_H_
