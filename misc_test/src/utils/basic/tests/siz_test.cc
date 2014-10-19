@@ -46,6 +46,10 @@ int main(int argc, char **argv) {
       << "sizeof(intptr) is " << sizeof(j) 
       << " != sizeof(long int) is " << sizeof(long int);
 
+  LOG(INFO) << "sizeof(string{}) = " << sizeof(string{})
+            << ": sizeof(string{\"\"}) = " << sizeof(string{""})
+            << ": sizeof(string{\"a\"}) = " << sizeof(string{"a"});
+
   return 0;
 }
 

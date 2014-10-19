@@ -31,6 +31,7 @@ project (CPP_MISC_TEST)
 #                Directory Settings                   #
 #######################################################
 # message("CMAKE_SOURCE_DIR is ${CMAKE_SOURCE_DIR}")
+# message("CMAKE_BUILD_DIR is ${CMAKE_BUILD_DIR}")
 # message("CMAKE_TEST_OP_DIR is ${CMAKE_TEST_OP_DIR}")
 # message("CMAKE_BIN_DIR is ${CMAKE_BIN_DIR}")
 # message("CMAKE_DOC_DIR is ${CMAKE_DOC_DIR}")
@@ -145,8 +146,10 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wl,--no-as-needed -pthread")
 # Finally we set the C++11 compiler option
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 
-# Set the compiler's include paths.
-include_directories(${CMAKE_SOURCE_DIR})
+# Set the compiler's include paths: 
+# 1) All includes are relative to base of source directories OR
+# 2) For Protobuf or other generated files from top of build directory
+include_directories(${CMAKE_SOURCE_DIR} ${CMAKE_BUILD_DIR})
 
 #######################################
 # Enable Dashboard Scripting or CTest #
@@ -164,6 +167,38 @@ endif (CMAKE_CUSTOM_DASHBOARD_SCRIPTING)
 ##############################
 #          Functions         #
 ##############################
+# protobuf_generate_cpp() provided by CMAKE 
+# 1) Does not allow tweaking --proto_path & --cpp_out args to protoc
+# 2) Is such that sets GENERATED flags true for PROTO_SRC and PROTO_HEADER.
+# 3) Requires add_executable/library() calls within the same directory.
+# Custom function to work around these limitations.
+function(pbuf_gen_cpp pbuf_file)
+  # ABSOLUTE  = Full path to file
+  get_filename_component(pbuf_abs_path ${pbuf_file} ABSOLUTE)
+  # NAME_WE = File name without directory or longest extension
+  get_filename_component(pbuf_base ${pbuf_file} NAME_WE)
+  set(pbuf_gen_files 
+      "${CMAKE_CURRENT_BINARY_DIR}/${pbuf_base}.pb.h"
+      "${CMAKE_CURRENT_BINARY_DIR}/${pbuf_base}.pb.cc")
+
+  # --proto_path arguments to protoc includes all files referred
+  # from project source directory and implicit in PROTOBUF
+  set(pbuf_proto_args "--proto_path=${CMAKE_SOURCE_DIR}")
+  foreach(pbuf_inc_dir ${PROTOBUF_INCLUDE_DIRS})
+    list(APPEND pbuf_proto_args "--proto_path=${pbuf_inc_dir}")
+  endforeach(pbuf_inc_dir)
+
+  add_custom_command(
+    OUTPUT ${pbuf_gen_files}
+    COMMAND ${PROTOBUF_PROTOC_EXECUTABLE}
+    ARGS ${pbuf_proto_args} --cpp_out=${CMAKE_BUILD_DIR}  ${pbuf_abs_path}
+    DEPENDS ${pbuf_abs_path}
+    COMMENT "Running protoc on ${pbuf_file}"
+    VERBATIM
+  )
+  set_source_files_properties(${pbuf_gen_files} PROPERTIES GENERATED TRUE)
+endfunction(pbuf_gen_cpp)
+
 function(register_test test_name)
   # Test Dump Director: same relative path wrt to the base directory.
   file(RELATIVE_PATH rel_path ${CMAKE_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR})
@@ -233,20 +268,7 @@ endfunction(add_ctest_fn)
 ######################################
 #           SubDirectories           #
 ######################################
-add_subdirectory(async_test)
-add_subdirectory(cast_test)
 add_subdirectory(experiment_test)
-add_subdirectory(future_promise_test)
-add_subdirectory(loop_test)
-add_subdirectory(msgq_test)
-add_subdirectory(mutex_test)
-add_subdirectory(packaged_task_test)
-add_subdirectory(prof_test)
-add_subdirectory(ref_test)
-add_subdirectory(rval_test)
-add_subdirectory(template_test)
-add_subdirectory(thread_test)
-add_subdirectory(udl_test)
 add_subdirectory(utils)
 # Generate documentation for all doxygen annotated files
 add_subdirectory(doc_framework)
