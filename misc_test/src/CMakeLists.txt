@@ -167,38 +167,6 @@ endif (CMAKE_CUSTOM_DASHBOARD_SCRIPTING)
 ##############################
 #          Functions         #
 ##############################
-# protobuf_generate_cpp() provided by CMAKE 
-# 1) Does not allow tweaking --proto_path & --cpp_out args to protoc
-# 2) Is such that sets GENERATED flags true for PROTO_SRC and PROTO_HEADER.
-# 3) Requires add_executable/library() calls within the same directory.
-# Custom function to work around these limitations.
-function(pbuf_gen_cpp pbuf_file)
-  # ABSOLUTE  = Full path to file
-  get_filename_component(pbuf_abs_path ${pbuf_file} ABSOLUTE)
-  # NAME_WE = File name without directory or longest extension
-  get_filename_component(pbuf_base ${pbuf_file} NAME_WE)
-  set(pbuf_gen_files 
-      "${CMAKE_CURRENT_BINARY_DIR}/${pbuf_base}.pb.h"
-      "${CMAKE_CURRENT_BINARY_DIR}/${pbuf_base}.pb.cc")
-
-  # --proto_path arguments to protoc includes all files referred
-  # from project source directory and implicit in PROTOBUF
-  set(pbuf_proto_args "--proto_path=${CMAKE_SOURCE_DIR}")
-  foreach(pbuf_inc_dir ${PROTOBUF_INCLUDE_DIRS})
-    list(APPEND pbuf_proto_args "--proto_path=${pbuf_inc_dir}")
-  endforeach(pbuf_inc_dir)
-
-  add_custom_command(
-    OUTPUT ${pbuf_gen_files}
-    COMMAND ${PROTOBUF_PROTOC_EXECUTABLE}
-    ARGS ${pbuf_proto_args} --cpp_out=${CMAKE_BUILD_DIR}  ${pbuf_abs_path}
-    DEPENDS ${pbuf_abs_path}
-    COMMENT "Running protoc on ${pbuf_file}"
-    VERBATIM
-  )
-  set_source_files_properties(${pbuf_gen_files} PROPERTIES GENERATED TRUE)
-endfunction(pbuf_gen_cpp)
-
 function(register_test test_name)
   # Test Dump Director: same relative path wrt to the base directory.
   file(RELATIVE_PATH rel_path ${CMAKE_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR})
@@ -264,6 +232,65 @@ function(add_ctest_fn test_name)
   endforeach(optional_arg)
   register_test(${tmpname})
 endfunction(add_ctest_fn)
+
+# Find the protobuf package.
+find_package(Protobuf REQUIRED)
+
+# protobuf_generate_cpp() provided by CMAKE 
+# 1) Does not allow tweaking --proto_path & --cpp_out args to protoc
+# 2) Is such that sets GENERATED flags true for PROTO_SRC and PROTO_HEADER.
+# 3) Requires add_executable/library() calls within the same directory.
+# Below is a custom function to work around these limitations.
+
+function(pbuf_gen_cpp_fn pbuf_src_files)
+  if(NOT ARGN)
+    message(FATAL_ERROR "pbuf_gen_cpp_fn called without any proto files")
+    return()
+  endif(NOT ARGN)
+
+  # --proto_path arguments to protoc includes all files referred
+  # from project source directory and implicit in 
+  # PROTOBUF_INCLUDE_DIR - The include directory for protocol buffers
+  set(pbuf_proto_args "--proto_path=${CMAKE_SOURCE_DIR}")
+  foreach(pbuf_inc_dir ${PROTOBUF_INCLUDE_DIRS})
+    list(APPEND pbuf_proto_args "--proto_path=${pbuf_inc_dir}")
+  endforeach(pbuf_inc_dir)
+
+  set(pbuf_src_files) 
+  foreach(pbuf_file ${ARGN})
+    # ABSOLUTE  = Full path to file
+    get_filename_component(pbuf_abs_path ${pbuf_file} ABSOLUTE)
+    # NAME_WE = File name without directory or longest extension
+    get_filename_component(pbuf_base ${pbuf_file} NAME_WE)
+    set(pbuf_srcs
+        "${CMAKE_CURRENT_BINARY_DIR}/${pbuf_base}.pb.h"
+        "${CMAKE_CURRENT_BINARY_DIR}/${pbuf_base}.pb.cc")
+    list(APPEND pbuf_src_files ${pbuf_srcs})
+    # PROTOBUF_PROTOC_EXECUTABLE - The protoc compiler
+    add_custom_command(
+      OUTPUT ${pbuf_srcs}
+      COMMAND ${PROTOBUF_PROTOC_EXECUTABLE}
+      ARGS ${pbuf_proto_args} --cpp_out=${CMAKE_BUILD_DIR}  ${pbuf_abs_path}
+      DEPENDS ${pbuf_abs_path}
+      COMMENT "Running protoc on ${pbuf_file}"
+      VERBATIM
+    )
+  endforeach(pbuf_file)
+  set_source_files_properties(${pbuf_src_files} PROPERTIES GENERATED TRUE)
+  set(pbuf_src_files ${pbuf_src_files} PARENT_SCOPE)
+endfunction(pbuf_gen_cpp_fn)
+
+function(add_pbuf_ctest_fn pbuf_src_files test_name)
+  set(tmpname ${test_name}_test)
+  message("pbuf_src_files is ${pbuf_src_files}")
+  add_executable(${tmpname} ${tmpname}.cc ${pbuf_src_files})
+  target_link_libraries(${tmpname} basic_utils ${PROTOBUF_LIBRARIES})
+  # All optional arguments are libraries 
+  foreach(optional_arg ${ARGN})
+    target_link_libraries(${tmpname} ${optional_arg})
+  endforeach(optional_arg)
+  register_test(${tmpname})
+endfunction(add_pbuf_ctest_fn)
 
 ######################################
 #           SubDirectories           #
