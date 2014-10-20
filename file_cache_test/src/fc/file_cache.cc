@@ -31,7 +31,7 @@
 // #include <glog/logging.h>
 // #include <stdlib.h>
 
-#include "src/fc/file_cache.h"
+#include "fc/file_cache.h"
 
 using namespace std;
 

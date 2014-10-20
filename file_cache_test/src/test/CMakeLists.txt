@@ -22,6 +22,5 @@ add_executable(file_cache_test fc_test.cc)
 
 # Link the executable to the file_cache library. 
 target_link_libraries(file_cache_test file_cache_lib gflags glog ${GTEST_LIBRARIES} pthread)
-
-set_target_properties(file_cache_test PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
+set_target_properties(file_cache_test PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${FILECACHE_BIN_DIR})
 set_target_properties(file_cache_test PROPERTIES OUTPUT_NAME file_cache_test${BUILD_POSTFIX})

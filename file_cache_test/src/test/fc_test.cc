@@ -22,7 +22,7 @@
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 
-#include "src/fc/file_cache.h"
+#include "fc/file_cache.h"
 
 namespace {
 

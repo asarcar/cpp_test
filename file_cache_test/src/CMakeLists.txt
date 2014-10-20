@@ -13,6 +13,28 @@
 # limitations under the License.
 
 # Author: Arijit Sarcar
+cmake_minimum_required(VERSION 2.8)
+
+project(FILECACHE)
+
+get_filename_component(FILECACHE_TOP_DIR "${CMAKE_SOURCE_DIR}/.." ABSOLUTE)
+set(FILECACHE_LIB_DIR "${FILECACHE_TOP_DIR}/lib")
+set(FILECACHE_BIN_DIR "${FILECACHE_TOP_DIR}/bin")
+
+# Compiler and Flag Options
+set(CMAKE_CXX_COMPILER "g++")
+set(CMAKE_CXX_FLAGS "-std=c++0x -ggdb -Wall -pthread")
+
+if (CMAKE_BUILD_TYPE STREQUAL Debug)
+  set(BUILD_POSTFIX "_d")
+else (CMAKE_BUILD_TYPE STREQUAL Debug)
+  set(BUILD_POSTFIX "")
+endif (CMAKE_BUILD_TYPE STREQUAL Debug)
+
+# Set the compiler's include paths: 
+# 1) All includes are relative to base of source directories OR
+# 2) For Protobuf or other generated files from top of build directory
+include_directories(${FILECACHE_SOURCE_DIR} ${FILECACHE_BINARY_DIR})
 
 add_subdirectory(fc)
 
