@@ -22,7 +22,7 @@
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 
-#include "fc/file_cache.h"
+#include "file_cache.h"
 
 namespace {
 
@@ -115,6 +115,9 @@ TEST_F(FileClassTest, IsFileCacheEntryContentionResolved) {
 
 
 //-----------------------------------------------------------------------------
+// Flag Declarations
+DECLARE_bool(auto_test);
+
 int main(int argc, char **argv) {
     // Initialize Google's logging library.
     google::InitGoogleLogging(argv[0]);
@@ -131,3 +134,6 @@ int main(int argc, char **argv) {
 
     return res;
 }
+
+DEFINE_bool(auto_test, false, 
+            "test run programmatically (when true) or manually (when false)");

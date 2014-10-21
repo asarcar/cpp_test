@@ -1,4 +1,4 @@
-# Copyright 2014 Elastasy Inc.
+# Copyright 2014 asarcar Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,22 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Author: Arijit Sarcar
-cmake_minimum_required(VERSION 2.8)
+# Author: Arijit Sarcar <sarcar_a@yahoo.com>
+pbuf_gen_cpp_fn(pbuf_src_files address_book.proto)
+message("pbuf_src_files: ${pbuf_src_files}")
+add_pbuf_ctest_fn("${pbuf_src_files}" abook_pbuf)
 
-project(FILECACHE)
-
-get_filename_component(FILECACHE_TOP_DIR "${CMAKE_SOURCE_DIR}/.." ABSOLUTE)
-
-# Compiler and Flag Options
-set(CMAKE_CXX_COMPILER "g++")
-set(CMAKE_CXX_FLAGS "-std=c++0x -ggdb -Wall -pthread")
-
-enable_testing()
-
-# Set the compiler's include paths: 
-# All includes are relative to base of source directories OR
-include_directories(${FILECACHE_SOURCE_DIR})
-
-add_subdirectory(fc)
-add_subdirectory(test)

@@ -11,10 +11,3 @@ installed (# packages are optional):
 # - emacs23 (editor) & load google-c-style.el
 # libprotobuf-dev
 
-Build the file cache library and the test cases
-> mkdir -p $TOP_DIR/build
-> cd $TOP_DIR/build
-> cmake VERBOSE=1 ../src -DCMAKE_BUILD_TYPE=Debug
-> make
-> make test
-

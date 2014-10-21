@@ -14,13 +14,14 @@
 
 # Author: Arijit Sarcar
 
-# Locate GTest
-find_package(GTest REQUIRED)
-include_directories(${GTEST_INCLUDE_DIRS})
+# Allows one to refer to header files in this directory 
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}) 
 
-# Link the executable to the file_cache library. 
-add_executable(file_cache_test fc_test.cc)
-target_link_libraries(file_cache_test file_cache_lib gflags glog ${GTEST_LIBRARIES} pthread)
-# Register the test.
-add_test(file_cache_test /bin/sh -c 
-         "${CMAKE_CURRENT_BINARY_DIR}/file_cache_test --log_dir=\"${CMAKE_CURRENT_BINARY_DIR}\" --gtest_output=\"xml:${CMAKE_CURRENT_BINARY_DIR}/test_output.xml\"")
+add_library(file_cache_lib file_cache.cc)
+
+######################################
+#           SubDirectories           #
+######################################
+if (CMAKE_CUSTOM_UNIT_TESTS)
+  add_subdirectory(tests)
+endif (CMAKE_CUSTOM_UNIT_TESTS)

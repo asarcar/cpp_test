@@ -1,4 +1,4 @@
-# Copyright 2014 Elastasy Inc.
+# Copyright 2014 asarcar Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,6 +12,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Author: Arijit Sarcar
-
-add_library(file_cache_lib file_cache.cc)
+# Author: Arijit Sarcar <sarcar_a@yahoo.com>
+add_ctest_fn(levdb_ops leveldb snappy)

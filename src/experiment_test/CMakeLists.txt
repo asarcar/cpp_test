@@ -13,21 +13,20 @@
 # limitations under the License.
 
 # Author: Arijit Sarcar <sarcar_a@yahoo.com>
-pbuf_gen_cpp_fn(pbuf_src_files address_book.proto)
-message("pbuf_src_files: ${pbuf_src_files}")
-add_pbuf_ctest_fn("${pbuf_src_files}" abook_pbuf)
-
-# add_executable(foo foo.cc ${PROTO_SRCS} ${PROTO_HDRS})
-# target_link_libraries(foo ${PROTOBUF_LIBRARIES})
-# > FIND_PACKAGE(Protobuf)
-# > 
-# > IF(PROTOBUF_FOUND)
-# >
-# >     INCLUDE_DIRECTORIES(${PROTOBUF_INCLUDE_DIRS})
-# >
-# >     INCLUDE_DIRECTORIES(${CMAKE_CURRENT_BINARY_DIR})
-# >
-# >     PROTOBUF_GENERATE_CPP(PROTO_SRCS PROTO_HDRS data.proto)
-# >
-# > ENDIF()
-
+add_subdirectory(async_test)
+add_subdirectory(cast_test)
+add_subdirectory(file_cache_test)
+add_subdirectory(future_promise_test)
+add_subdirectory(levdb_test)
+add_subdirectory(loop_test)
+add_subdirectory(msgq_test)
+add_subdirectory(mutex_test)
+add_subdirectory(other_test)
+add_subdirectory(packaged_task_test)
+add_subdirectory(pbuf_test)
+add_subdirectory(prof_test)
+add_subdirectory(ref_test)
+add_subdirectory(rval_test)
+add_subdirectory(template_test)
+add_subdirectory(thread_test)
+add_subdirectory(udl_test)
