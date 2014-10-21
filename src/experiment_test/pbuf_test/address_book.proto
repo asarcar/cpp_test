@@ -27,8 +27,8 @@ message Person {
     required string     Number = 1;
     optional PhoneType  type   = 2 [default = HOME]; 
   }
-  
-  repeated PhoneNumber phone   = 4;
+  optional PhoneNumber primary_phone = 4;
+  repeated PhoneNumber phone   = 5;
 }
 
 message AddressBook {

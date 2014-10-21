@@ -44,7 +44,7 @@ class ABookPBufTester {
   void Run(void) {
     InitFile();
     OneTest();
-    AppendFile();
+    AppendFileTest();
     TwoTest();
     return;
   }
@@ -56,6 +56,12 @@ class ABookPBufTester {
   array<int,NUM_PEOPLE>     id_   {{1, 2}};
   array<string,NUM_PEOPLE>  email_{
     {"rajesh@test.one.com", "anthony@test.two.com"}
+  };
+  array<string,NUM_PHONE> primary_phone_{
+    {"111-111-1111", "222-222-2222"}
+  };
+  array<Person_PhoneType,NUM_PHONE> primary_phone_type_ {
+    { Person_PhoneType_HOME, Person_PhoneType_MOBILE }
   };
   array<string,NUM_PHONE> phone_{
     {"111-222-3333", "111-222-4444", "222-333-4444", "222-333-5555"}
@@ -72,6 +78,9 @@ class ABookPBufTester {
     person_p->set_name(name_.at(0));
     person_p->set_id(id_.at(0));
     person_p->set_email(email_.at(0));
+    Person_PhoneNumber *primary_phone_p = new Person_PhoneNumber();
+    primary_phone_p->set_number(primary_phone_.at(0));
+    person_p->set_allocated_primary_phone(primary_phone_p);
     Person_PhoneNumber *phone_p = person_p->add_phone();
     phone_p->set_number(phone_.at(0));
     phone_p = person_p->add_phone();
@@ -88,6 +97,7 @@ class ABookPBufTester {
     fstream ifs(file_, ios::in | ios::binary);
     bool parse_ok = abook.ParseFromIstream(&ifs);
     FASSERT(parse_ok);
+
     FASSERT(abook.person_size() == 1);
     const Person& person = abook.person(0);
     CHECK(person.has_name());
@@ -96,6 +106,14 @@ class ABookPBufTester {
     CHECK_EQ(person.id(), id_.at(0));
     CHECK(person.has_email());
     CHECK_EQ(person.email(), email_.at(0));
+
+    FASSERT(person.has_primary_phone());
+    const Person_PhoneNumber& primary_phone = person.primary_phone();
+    CHECK(primary_phone.has_number());
+    CHECK_EQ(primary_phone.number(), primary_phone_.at(0));
+    CHECK(!primary_phone.has_type());
+    CHECK_EQ(primary_phone.type(), primary_phone_type_.at(0));
+
     FASSERT(person.phone_size() == 2);
     const Person_PhoneNumber& phone = person.phone(0);
     CHECK(phone.has_number());
@@ -117,16 +135,46 @@ class ABookPBufTester {
 
     return;
   }
-  void AppendFile(void) {
+  void AppendFileTest(void) {
     AddressBook abook;
     fstream ifs(file_, ios::in | ios::binary);
     bool parse_ok = abook.ParseFromIstream(&ifs);
     FASSERT(parse_ok);
+
     FASSERT(abook.person_size() == 1);
     Person* person_p = abook.add_person();
     person_p->set_name(name_.at(1));
     person_p->set_id(id_.at(1));
     person_p->set_email(email_.at(1));
+
+    // Testing how optional member objects are assigned to container object
+
+    // Implicit Creation: calling mutable on optional object
+    Person_PhoneNumber *primary_phone_p = person_p->mutable_primary_phone();
+    FASSERT(primary_phone_p);
+    primary_phone_p->set_number(primary_phone_.at(1));
+    primary_phone_p->set_type(primary_phone_type_.at(1));
+    // release call returns the same pointer whose ownership is passed to pbuf
+    CHECK_EQ(person_p->release_primary_phone(), primary_phone_p);
+    delete(primary_phone_p);
+
+    Person_PhoneNumber *primary_phone2_p = new Person_PhoneNumber();
+    primary_phone2_p->set_number(primary_phone_.at(1));
+    primary_phone2_p->set_type(primary_phone_type_.at(1));
+    person_p->set_allocated_primary_phone(primary_phone2_p);
+    // mutable call returns the same pointer whose ownership is passed to pbuf
+    CHECK_EQ(person_p->mutable_primary_phone(), primary_phone2_p);
+    // release call returns the same pointer whose ownership is passed to pbuf
+    CHECK_EQ(person_p->release_primary_phone(), primary_phone2_p);
+    delete primary_phone2_p;
+
+    Person_PhoneNumber *primary_phone3_p = new Person_PhoneNumber();
+    primary_phone3_p->set_number(primary_phone_.at(1));
+    primary_phone3_p->set_type(primary_phone_type_.at(1));
+    person_p->set_allocated_primary_phone(primary_phone3_p);
+    // mutable call returns the same pointer whose ownership is passed to pbuf
+    CHECK_EQ(person_p->mutable_primary_phone(), primary_phone3_p);
+
     Person_PhoneNumber *phone_p = person_p->add_phone();
     phone_p->set_number(phone_.at(2));
     phone_p->set_type(phone_type_.at(2));
@@ -143,6 +191,7 @@ class ABookPBufTester {
     fstream ifs(file_, ios::in | ios::binary);
     bool parse_ok = abook.ParseFromIstream(&ifs);
     FASSERT(parse_ok);
+
     FASSERT(abook.person_size() == 2);
     const Person& person = abook.person(1);
     CHECK(person.has_name());
@@ -151,12 +200,21 @@ class ABookPBufTester {
     CHECK_EQ(person.id(), id_.at(1));
     CHECK(person.has_email());
     CHECK_EQ(person.email(), email_.at(1));
+
+    FASSERT(person.has_primary_phone());
+    const Person_PhoneNumber& primary_phone = person.primary_phone();
+    CHECK(primary_phone.has_number());
+    CHECK_EQ(primary_phone.number(), primary_phone_.at(1));
+    CHECK(primary_phone.has_type());
+    CHECK_EQ(primary_phone.type(), primary_phone_type_.at(1));
+
     FASSERT(person.phone_size() == 2);
     const Person_PhoneNumber& phone = person.phone(0);
     CHECK(phone.has_number());
     CHECK_EQ(phone.number(), phone_.at(2));
     CHECK(phone.has_type());
     CHECK_EQ(phone.type(), phone_type_.at(2));
+
     const Person_PhoneNumber& phone2 = person.phone(1);
     CHECK(phone2.has_number());
     CHECK_EQ(phone2.number(), phone_.at(3));
