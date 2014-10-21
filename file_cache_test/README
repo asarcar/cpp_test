@@ -12,13 +12,9 @@ installed (# packages are optional):
 # libprotobuf-dev
 
 Build the file cache library and the test cases
-> mkdir -p $TOP_DIR/build/debug
-> cd $TOP_DIR/build/debug
-> cmake VERBOSE=1 ../../src -DCMAKE_BUILD_TYPE=Debug
+> mkdir -p $TOP_DIR/build
+> cd $TOP_DIR/build
+> cmake VERBOSE=1 ../src -DCMAKE_BUILD_TYPE=Debug
 > make
-> ../../bin/file_cache_test_d
-> cd $TOP_DIR
+> make test
 
-Run the test case
-> cd $TOP_DIR/file_cache/bin
-> ./bin/file_cache_test_d --log_dir="./test_ip_op/" --gtest_output="xml:./test_ip_op/test_output.xml"

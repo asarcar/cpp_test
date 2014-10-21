@@ -18,9 +18,9 @@
 find_package(GTest REQUIRED)
 include_directories(${GTEST_INCLUDE_DIRS})
 
-add_executable(file_cache_test fc_test.cc)
-
 # Link the executable to the file_cache library. 
+add_executable(file_cache_test fc_test.cc)
 target_link_libraries(file_cache_test file_cache_lib gflags glog ${GTEST_LIBRARIES} pthread)
-set_target_properties(file_cache_test PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${FILECACHE_BIN_DIR})
-set_target_properties(file_cache_test PROPERTIES OUTPUT_NAME file_cache_test${BUILD_POSTFIX})
+# Register the test.
+add_test(file_cache_test /bin/sh -c 
+         "${CMAKE_CURRENT_BINARY_DIR}/file_cache_test --log_dir=\"${CMAKE_CURRENT_BINARY_DIR}\" --gtest_output=\"xml:${CMAKE_CURRENT_BINARY_DIR}/test_output.xml\"")

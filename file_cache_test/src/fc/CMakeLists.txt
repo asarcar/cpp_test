@@ -14,6 +14,4 @@
 
 # Author: Arijit Sarcar
 
-add_library(file_cache_lib SHARED file_cache.cc)
-set_target_properties(file_cache_lib PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${FILECACHE_LIB_DIR}) 
-set_target_properties(file_cache_lib PROPERTIES OUTPUT_NAME file_cache_lib${BUILD_POSTFIX})
+add_library(file_cache_lib file_cache.cc)
