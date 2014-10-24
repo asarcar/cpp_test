@@ -120,6 +120,14 @@ class MetaTester {
     CHECK_EQ(mtnf_.getField().v_[1], 6);
     CHECK_EQ(mtnf_.getPtr()->v_[0], 5);
     CHECK_EQ(mtnf_.getPtr()->v_[1], 6);
+
+    // toString Check
+    CHECK(toStringIsDefined<X1>());
+    CHECK_EQ(X1().toString(), string("X1"));
+    CHECK(toStringIsDefined<X2>());
+    CHECK_EQ(X2().toString(), string("X2"));
+    CHECK(!toStringIsDefined<X3>());
+
     return;
   }
  private:
@@ -137,6 +145,13 @@ class MetaTester {
   NonFundamental            nfundamental_;
   MetaClass<Fundamental>    mtf_;
   MetaClass<NonFundamental> mtnf_;
+  struct X1 {
+    string toString() { return string("X1"); }
+  };
+  struct X2 { 
+    string toString() const { return string("X2"); }
+  };
+  struct X3 {};
 };
 
 // Flag Declarations

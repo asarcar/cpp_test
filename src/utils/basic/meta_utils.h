@@ -121,6 +121,25 @@ constexpr size_t Extent(void) { return std::extent<T>::value; }
 template< class T >
 using RemoveExtent = typename std::remove_extent<T>::type;
 
+//! @brief   toString member function check wrapper
+//           concept from Bjarne metaprogramming example           
+template <typename T>
+struct toStringCheck {
+ private:
+  // Valid function: X.toString() exists
+  template <typename X>
+  static auto check_toString(X&& x) -> decltype(x.toString());
+  static std::false_type check_toString(...); // SFINAE default case
+ public:
+  using type = decltype(check_toString(std::declval<T>()));
+};
+
+template <typename T>
+constexpr bool toStringIsDefined() { 
+  return !IsSame< typename toStringCheck<T>::type, std::false_type>();
+}
+
+
 //-----------------------------------------------------------------------------
 } // namespace asarcar
 
