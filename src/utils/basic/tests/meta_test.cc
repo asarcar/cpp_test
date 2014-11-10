@@ -26,7 +26,7 @@
 // Local Headers
 #include "utils/basic/basictypes.h"
 #include "utils/basic/init.h"
-#include "utils/basic/meta_utils.h"
+#include "utils/basic/meta.h"
 
 using namespace asarcar;
 using namespace std;
@@ -127,6 +127,12 @@ class MetaTester {
     CHECK(toStringIsDefined<X2>());
     CHECK_EQ(X2().toString(), string("X2"));
     CHECK(!toStringIsDefined<X3>());
+
+    // initializer list test
+    const initializer_list<int>& v = VARARGS_MAKE_INITIALIZER_LIST(1,2,4,8,16);
+    CHECK_EQ(v.size(), 5);
+    auto mid = v.begin() + v.size()/2;
+    CHECK_EQ(*mid, 4);
 
     return;
   }

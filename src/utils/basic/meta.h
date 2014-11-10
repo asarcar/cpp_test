@@ -13,15 +13,15 @@
 // limitations under the License.
 //
 
-//! @file     meta_utils.h
+//! @file     meta.h
 //! @brief    Utilities to assist in meta programming. Taken liberally
 //            from Bjarne Stroustrup. Many wrappers will be available 
 //            by default from C++14
 
 //! @author   Arijit Sarcar <sarcar_a@yahoo.com>
 
-#ifndef _UTILS_BASIC_META_UTILS_H_
-#define _UTILS_BASIC_META_UTILS_H_
+#ifndef _UTILS_BASIC_META_H_
+#define _UTILS_BASIC_META_H_
 
 // C++ Standard Headers
 #include <iostream>
@@ -139,9 +139,10 @@ constexpr bool toStringIsDefined() {
   return !IsSame< typename toStringCheck<T>::type, std::false_type>();
 }
 
+#define VARARGS_MAKE_INITIALIZER_LIST(...) { __VA_ARGS__ }
 
 //-----------------------------------------------------------------------------
 } // namespace asarcar
 
-#endif // _UTILS_BASIC_META_UTILS_H_
+#endif // _UTILS_BASIC_META_H_
 
