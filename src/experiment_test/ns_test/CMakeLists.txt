@@ -13,21 +13,4 @@
 # limitations under the License.
 
 # Author: Arijit Sarcar <sarcar_a@yahoo.com>
-add_subdirectory(async_test)
-add_subdirectory(cast_test)
-add_subdirectory(file_cache_test)
-add_subdirectory(future_promise_test)
-add_subdirectory(levdb_test)
-add_subdirectory(loop_test)
-add_subdirectory(msgq_test)
-add_subdirectory(mutex_test)
-add_subdirectory(ns_test)
-add_subdirectory(other_test)
-add_subdirectory(packaged_task_test)
-add_subdirectory(pbuf_test)
-add_subdirectory(prof_test)
-add_subdirectory(ref_test)
-add_subdirectory(rval_test)
-add_subdirectory(template_test)
-add_subdirectory(thread_test)
-add_subdirectory(udl_test)
+add_root_ctest_fn(uts_main)

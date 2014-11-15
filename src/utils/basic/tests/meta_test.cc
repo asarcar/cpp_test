@@ -129,10 +129,12 @@ class MetaTester {
     CHECK(!toStringIsDefined<X3>());
 
     // initializer list test
-    const initializer_list<int>& v = VARARGS_MAKE_INITIALIZER_LIST(1,2,4,8,16);
+    const initializer_list<int>& v = VARARGS_TO_INIT_LIST(1,2,4,8,16);
     CHECK_EQ(v.size(), 5);
     auto mid = v.begin() + v.size()/2;
     CHECK_EQ(*mid, 4);
+    const initializer_list<string>& s = VARARGS_TO_INIT_LIST("x", "y", "z");
+    CHECK_EQ(s.size(), 3);
 
     return;
   }

@@ -167,14 +167,19 @@ endif (CMAKE_CUSTOM_DASHBOARD_SCRIPTING)
 ##############################
 #          Functions         #
 ##############################
-function(register_test test_name)
+function(register_test is_root_user test_name)
   # Test Dump Director: same relative path wrt to the base directory.
   file(RELATIVE_PATH rel_path ${CMAKE_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR})
   set(test_op_dir ${CMAKE_TEST_OP_DIR}/${rel_path}/${test_name})
 
   set(test_command "/bin/mkdir -p ${test_op_dir} && ")
-  set(test_command 
-    "${test_command} ${CMAKE_CURRENT_BINARY_DIR}/${test_name}${BUILD_POSTFIX}")
+  if (${is_root_user})
+    set(test_command 
+      "${test_command} sudo ${CMAKE_CURRENT_BINARY_DIR}/${test_name}${BUILD_POSTFIX}")
+  else (${is_root_user})
+    set(test_command 
+      "${test_command} ${CMAKE_CURRENT_BINARY_DIR}/${test_name}${BUILD_POSTFIX}")
+  endif (${is_root_user})
   set(test_command "${test_command} --auto_test=true")    
 
   # We support optional arguments to this function - they'll all be passed on
@@ -230,8 +235,16 @@ function(add_ctest_fn test_name)
   foreach(optional_arg ${ARGN})
     target_link_libraries(${tmpname} ${optional_arg})
   endforeach(optional_arg)
-  register_test(${tmpname})
+  register_test(false ${tmpname})
 endfunction(add_ctest_fn)
+
+function(add_root_ctest_fn test_name)
+  set(tmpname ${test_name}_test)
+  add_executable(${tmpname} ${tmpname}.cc)
+  target_link_libraries(${tmpname} basic_utils)
+  # For now we are not passing any extra arguments
+  register_test(true ${tmpname})
+endfunction(add_root_ctest_fn)
 
 # Find the protobuf package.
 find_package(Protobuf REQUIRED)
@@ -289,7 +302,7 @@ function(add_pbuf_ctest_fn pbuf_src_files test_name)
   foreach(optional_arg ${ARGN})
     target_link_libraries(${tmpname} ${optional_arg})
   endforeach(optional_arg)
-  register_test(${tmpname})
+  register_test(false ${tmpname})
 endfunction(add_pbuf_ctest_fn)
 
 ######################################

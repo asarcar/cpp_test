@@ -139,8 +139,8 @@ constexpr bool toStringIsDefined() {
   return !IsSame< typename toStringCheck<T>::type, std::false_type>();
 }
 
-#define VARARGS_MAKE_INITIALIZER_LIST(...) { __VA_ARGS__ }
-
+#define VARARGS_TO_INIT_LIST(...) { __VA_ARGS__ }
+ 
 //-----------------------------------------------------------------------------
 } // namespace asarcar
 
