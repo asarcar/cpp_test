@@ -57,11 +57,17 @@ class UtsNSTester {
  public:
   static constexpr size_t STACK_SIZE = 1024*1024;
   char child_stack[STACK_SIZE];
-  explicit UtsNSTester(const char *child_ns_name): child_ns_name_(child_ns_name) {
+
+  // TEST1:
+  // 1. BACKGROUND: Child created via clone() CLONE_NEWUTS param.
+  // 2. Set hostname of child to another name ns_name
+  // 3. Validate the new hostname of child.
+  int Test1UTSChildNS(char *ns_name) {
+    child_ns_name_ = ns_name;
     my_pid_ = getpid();
     // Create a child that has its own UTS namespace;
     // the child commences execution in childFunc()
-    child_pid_ = clone(TestUTSChildNS, 
+    child_pid_ = clone(UTSChildNSFunc, 
                        // Points to start of downwardly growing stack
                        child_stack + STACK_SIZE,   
                        CLONE_NEWUTS | SIGCHLD, 
@@ -70,10 +76,6 @@ class UtsNSTester {
       ProcError("clone");
     }
 
-    return;
-  }
-
-  int DumpUTSParentNS(void) {
     LOG(INFO) << "PID of parent " << my_pid_
               << ": child created by clone() " << child_pid_;
 
@@ -88,7 +90,11 @@ class UtsNSTester {
     return 0;
   }
 
-  int TestUTSSetNS(void) {
+  // TEST2: 
+  // 1. BACKGROUND: Child created via clone() CLONE_NEWUTS param.
+  // 2. Set UTS NS of the Parent with setns of Child NS
+  // 3. Validate the hostname of parent is same as that of child.
+  int Test2UTSSetNS(void) {
     int    fd;
     ostringstream oss;
     
@@ -120,7 +126,12 @@ class UtsNSTester {
     return 0;
   }
 
-  int TestUTSUnshareNS(void) {
+  // TEST3: 
+  // 1. BACKGROUND: Child created via clone() CLONE_NEWUTS param
+  //                Parent also in Child UTS_NS via setns call.
+  // 2. Set UTS NS of the Parent with unshare call with new_ns_name NS
+  // 3. Validate the hostname of parent is same as new_ns_name.
+  int Test3UTSUnshareNS(char *new_ns_name) {
     // Retrieve and display hostname
     if (uname(&uts) < 0) {
       ProcError("uname");
@@ -132,8 +143,7 @@ class UtsNSTester {
       ProcError("unshare");
     }
 
-    string new_name = string(child_ns_name_) + "-tmp";
-    if (sethostname(new_name.c_str(), new_name.length()) < 0) {
+    if (sethostname(new_ns_name, strlen(new_ns_name)) < 0) {
       ProcError("sethostname");
     }
     
@@ -142,12 +152,12 @@ class UtsNSTester {
       ProcError("uname");
     }
     LOG(INFO) << "PID " << my_pid_ << " parent post-unshare hostname() " << uts.nodename;
-    CHECK_EQ(strcmp(uts.nodename, new_name.c_str()), 0);
+    CHECK_EQ(strcmp(uts.nodename, new_ns_name), 0);
 
     return 0;
   }
   
-  int WaitChildTerminate(void) {
+  int ReapChild(void) {
     // Wait for child
     if (waitpid(child_pid_, NULL, 0) < 0) {
       ProcError("waitpid");
@@ -159,13 +169,12 @@ class UtsNSTester {
   }
 
  private:
-  const char *child_ns_name_;
+  char *child_ns_name_;
   pid_t child_pid_;
   pid_t my_pid_;
   struct utsname uts;
 
-  // Start function for cloned child
-  static int TestUTSChildNS(void *arg)
+  static int UTSChildNSFunc(void *arg)
   {
     struct utsname uts;
     pid_t  child_pid = getpid();
@@ -177,7 +186,7 @@ class UtsNSTester {
     LOG(INFO) << "PID " << child_pid << " child pre-sethostname(): " << uts.nodename;
 
     // Change hostname in UTS namespace of child
-    const char *child_ns_name = const_cast<char *>(static_cast<char *>(arg));
+    char *child_ns_name = static_cast<char *>(arg);
     
     if (sethostname(child_ns_name, strlen(child_ns_name)) < 0) {
       ProcError("sethostname");
@@ -213,11 +222,13 @@ main(int argc, char *argv[])
 {
   Init::InitEnv(&argc, &argv);
 
-  UtsNSTester utns("Ory");
-  utns.DumpUTSParentNS();
-  utns.TestUTSSetNS();
-  utns.TestUTSUnshareNS();
-  utns.WaitChildTerminate();
+  UtsNSTester utns;
+  char ns1[] = "Ory1";
+  utns.Test1UTSChildNS(ns1);
+  utns.Test2UTSSetNS();
+  char ns2[] = "Ory2";
+  utns.Test3UTSUnshareNS(ns2);
+  utns.ReapChild();
   
   return 0;
 }

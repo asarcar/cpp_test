@@ -41,17 +41,24 @@ class SystemError {
 
 class PidNSTester {
  public:
-  explicit PidNSTester(int level) : level_{level} {
-    DCHECK(level_ >= 0);
-    LOG_IF(FATAL, level_ <= 0) << "Only works with +ve level";
-  }
 
-  // Called only from the top level
-  int TestPidNS(void) {
-    pid_t child_pid = ClonePidNS(level_);
+  // TEST1: New PID NS created with CLONE_NEWPID
+  // 1. Spawn children, grandchild, upto N levels as passed to the function
+  // 2. Each child at each level is spawned in a new PID NS.
+  // 3. Verify that the "cloned" process in each new NS has PID 1, 
+  //    parent has PID 0 (as it was spawned in another NS that is not visible),
+  //    and child of cloned process has PID 2 in parent NS and 1 in its NS.
+  int Test1PidNS(int level) {
+    pid_t child_pid = ClonePidNS(level);
     // PID 1 is reserved for first process (init) in every NS
     CHECK_GT(child_pid, 1);
     WaitChildTerminate(child_pid);
+    return 0;
+  }
+
+  // TEST2
+  // 1. Spawn child in new PID NS using clone.
+  int Test2PidNS(void) {
     return 0;
   }
 
@@ -62,7 +69,6 @@ class PidNSTester {
 
  private:
   static constexpr size_t STACK_SIZE = 1024*1024;
-  int level_;
 
   // PID Clone NS and return PID of the child in the parent NS 
   static pid_t ClonePidNS(int level) {
@@ -196,8 +202,9 @@ main(int argc, char *argv[])
 {
   Init::InitEnv(&argc, &argv);
 
-  PidNSTester pid_ns(3);
-  pid_ns.TestPidNS();
+  PidNSTester pid_ns;
+  pid_ns.Test1PidNS(3);
+  pid_ns.Test2PidNS();
   
   return 0;
 }
