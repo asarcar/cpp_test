@@ -14,3 +14,4 @@
 
 # Author: Arijit Sarcar <sarcar_a@yahoo.com>
 add_root_ctest_fn(uts_main)
+add_root_ctest_fn(pid_main)
