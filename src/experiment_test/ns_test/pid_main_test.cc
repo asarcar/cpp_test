@@ -11,9 +11,9 @@
 #include <iostream>        
 #include <sstream>
 // C Standard Headers
-#include <climits>
 #include <cstring>
 #include <cstdlib>
+#include <fcntl.h>
 #include <sys/mount.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -52,13 +52,27 @@ class PidNSTester {
     pid_t child_pid = ClonePidNS(level);
     // PID 1 is reserved for first process (init) in every NS
     CHECK_GT(child_pid, 1);
-    WaitChildTerminate(child_pid);
+    ReapChild(child_pid);
     return 0;
   }
 
-  // TEST2
-  // 1. Spawn child in new PID NS using clone.
+  // TEST2 (Assume test spawned is PID Base in Namespace BASE)
+  // 2.1: ClonePidNS: Base clones child C1 in new PID_NS (CHILD_NS)
+  //      Validate C1-PID 1 (already tested in TEST1). 
+  // 2.2: Fork C2. Validate C2-PID is 2 & C2-PPID is 1.
+  // 2.3: C2 forks C3. Validate C3-PID is 3 & C3-PPID is 2. 
+  // 2.4: C2 exits. C3 orphaned. Validate C1 is reaps C2. Validate C3 reparented to C1.
+  // 2.5: C3 exits. Validate C1 reaps C3.  
+  // 2.6: C1 exits.
   int Test2PidNS(void) {
+    // 2.1: ClonePidNS: Clone Child C1
+    // 2.5: C1 reaps C3
+    // 2.6: C1 exits.
+    pid_t c1pid = Test2_Run();
+
+    // 2.6: C1 exits: Validate it is reaped by Base.
+    ReapChild(c1pid);
+
     return 0;
   }
 
@@ -68,13 +82,16 @@ class PidNSTester {
   }
 
  private:
+  static constexpr size_t READ=0; 
+  static constexpr size_t WRITE=1;
+
   static constexpr size_t STACK_SIZE = 1024*1024;
 
   // PID Clone NS and return PID of the child in the parent NS 
   static pid_t ClonePidNS(int level) {
     DCHECK(level > 0);
 
-    // Create a child that has its own UTS namespace;
+    // Create a child that has its own PID namespace;
     // the child commences execution in childFunc()
     pid_t child_pid = clone(PidNSFunc, 
                             // Points to start of downwardly growing stack
@@ -129,24 +146,20 @@ class PidNSTester {
     return 0;
   }
 
-  static int WaitChildTerminate(pid_t child_pid) {
+  static int ReapChild(pid_t child_pid) {
     pid_t pid = getpid();
     pid_t ppid = getppid();
 
-    LOG(INFO) << "Parent waiting for child termination"
-              << ": Child PID " << child_pid
-              << ": Parent PID " << pid 
-              << ": GrandParent PID " << ppid;
+    LOG(INFO) << "Parent PID " << pid << " waiting for child PID " << child_pid
+              << " termination - GrandParent PID " << ppid;
 
     // Wait for child
     if (waitpid(child_pid, NULL, 0) < 0) {
       ProcError("waitpid");
     }
 
-    LOG(INFO) << "Parent terminating after child termination"
-              << ": Child PID " << child_pid
-              << ": Parent PID " << pid 
-              << ": GrandParent PID " << ppid;
+    LOG(INFO) << "Parent PID " << pid << " reaped child PID " 
+              << child_pid << " after termination - GrandParent PID " << ppid;
 
     return 0;
   }
@@ -188,10 +201,105 @@ class PidNSTester {
     pid_t child_pid = ClonePidNS(level);
     CHECK_EQ(child_pid, 2);
 
-    WaitChildTerminate(child_pid);
+    ReapChild(child_pid);
 
     // UnMount procfs for the current PID namespace
     UnMountProc(level);
+
+    return 0;
+  }
+
+  // 2.1: ClonePidNS: Clone Child C1
+  pid_t Test2_Run(void) {
+    pid_t pid = getpid();
+    
+    // Create a child that has its own PID namespace;
+    // the child commences execution in Test2_1_Func()
+    pid_t c1pid = clone(Test2_Func, 
+                        // Points to start of downwardly growing stack
+                        new_stack(), CLONE_NEWPID | SIGCHLD, NULL);
+    LOG(INFO) << "PID " << pid << " Cloned C1-PID "<< c1pid << " in NEW_PID NS";
+    CHECK_GT(c1pid, pid);
+
+    return c1pid;
+  }
+
+  // 2.4: Validate C1 reaps C2.
+  // 2.5: C1 reaps C3
+  // 2.6: C1 exit.
+  static int Test2_Func(void *arg) {
+    pid_t pid = getpid();
+    pid_t ppid = getppid();
+
+    LOG(INFO) << "C1-PID " << pid << " pPID " << ppid << "(new PID_NS)";
+
+    CHECK_EQ(pid, 1);
+    CHECK_EQ(ppid, 0);
+
+    Test2_Remaining();
+    
+    ReapChild(2); // interrupted by SIGCHLD signal for C2
+    ReapChild(3); // interrupted by SIGCHLD signal for C3
+
+    return 0;
+  }
+
+  // 2.2: Fork C2. Validate C2-PID is 2 & C2-PPID is 1.
+  // 2.3: C2 forks C3. Validate C3-PID is 3 & C3-PPID is 2. 
+  // 2.4: C2 exits. C3 orphaned. Validate C1 is reaps C2. Validate C3 reparented to C1.
+  // 2.5: C3 exits. Validate C1 reaps C3.  
+  // 2.6: C1 exits.
+  static int Test2_Remaining(void) {
+    pid_t pid = getpid();
+    CHECK_EQ(pid, 1);
+    pid_t ppid = getppid();
+  
+    LOG(INFO) << "C1-PID " << pid << " pPID " << ppid << " forking C2";
+    pid_t c2pid = fork();
+
+    if (c2pid < 0) {
+      ProcError("fork-C2");
+    }
+
+    // Parent (PID-Base) Context: Return c2pid
+    if (c2pid > 0) {
+      CHECK_EQ(c2pid, 2);
+      LOG(INFO) << "C1-PID " << pid << " pPID " << ppid 
+                << " forked C2-PID " << c2pid;
+      return c2pid;
+    }
+    // Child C2 Context (i.e. c2pid == 0): Fork child C3 and exit with SUCCESS
+    pid = getpid();
+    ppid = getppid();
+    LOG(INFO) << "C2-PID " << pid << " pPID " << ppid << " now forking C3";
+    pid_t c3pid = fork();
+
+    if (c3pid < 0) {
+      ProcError("fork-C3");
+    }
+
+    // Parent C2 context: 
+    if (c3pid > 0) {
+      CHECK_EQ(c3pid, 3);
+      LOG(INFO) << "C2-PID " << pid << " orphaning C3-PID " << c3pid << " exiting...";
+      exit(EXIT_SUCCESS); // TODO: C++ throw exception to unwind stack cleanly
+    }
+
+    // Child (C3) Context i.e. c3pid == 0 
+    pid = getpid();
+    ppid = getppid();
+    LOG(INFO) << "C3-PID " << pid << " pPID " << ppid 
+              << " waiting for orphaned child to reparent to C1";
+
+    // loop will terminate once child is orphaned. 
+    // C3 should get re-parented to C1 after it is orphaned by C2
+    while (ppid != 1) {
+      usleep(10000);
+      ppid = getppid();
+    } 
+
+    LOG(INFO) << "C3-PID " << pid << " pPID " << ppid << " exiting now...";
+    exit(EXIT_SUCCESS); // TODO: C++ throw exception to unwind stack cleanly
 
     return 0;
   }

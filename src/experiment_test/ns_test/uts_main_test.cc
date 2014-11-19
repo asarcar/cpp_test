@@ -113,7 +113,7 @@ class UtsNSTester {
     close(fd);
 
     // Give child time to change its hostname
-    sleep(1);
+    usleep(50000);
 
     // Validate that gethostname returns the same string as child_ns_name_
     if (uname(&uts) < 0) {
@@ -203,7 +203,7 @@ class UtsNSTester {
     // Keep the namespace open for a while, by sleeping.
     // This allows some experimentation-- 
     // for example, another process might join the namespace.
-    sleep(2);
+    usleep(100000);
 
     // Terminates child
     LOG(INFO) << "PID " << child_pid << " child has terminated";
