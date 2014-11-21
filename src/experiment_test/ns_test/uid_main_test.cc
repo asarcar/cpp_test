@@ -14,6 +14,7 @@
 #include <iostream>        
 #include <sstream>
 // C Standard Headers
+#include <climits>          // PATH_MAX
 #include <cstring>
 #include <cstdlib>
 #include <fcntl.h>
@@ -42,10 +43,10 @@ class SystemError {
 class UidNSTester {
  public:
 
-  // TEST: 
+  // TEST1: 
   // Assume 
-  // a. Process Name space is spawned by UID_X and GID_X
-  // b.  and argv[2] are valid user-ids passed to the program.
+  // a. User Name space is spawned by UID_X and GID_X
+  // b. and uid1 and uid2 are valid user ids passed.
   //
   // 1. Fork C1 (PID1) in a new UID_NS_1. Set a mapping record 
   //    in the parent NS so that in uid in UID_NS_1 is uid1
@@ -55,7 +56,7 @@ class UidNSTester {
   //    UID_NS_2         UID_NS1         1 entry.
   // 4. Validate that when PID1 reads /proc/PID2/uid_map: it finds entry 
   //    UID_NS_1         UID_NS2         1 entry.
-  int TestUidNS(const uid_t uid1, const uid_t uid2) {
+  int Test1UidNS(const uid_t uid1, const uid_t uid2) {
     int pipe_child1[2];
     int pipe_child2[2];
 
@@ -66,9 +67,9 @@ class UidNSTester {
       ProcError("pipe2");
     }
     // 1. && 2.
-    pid_t cpid1 = CloneUidNS(pipe_child1);
+    pid_t cpid1 = CloneNS(pipe_child1);
     UpdateUidMap(cpid1, uid1);
-    pid_t cpid2 = CloneUidNS(pipe_child2);
+    pid_t cpid2 = CloneNS(pipe_child2);
     UpdateUidMap(cpid2, uid2);
 
     // Send cpid2, uid2 to C1 && cpid1, uid1 to C2
@@ -79,6 +80,60 @@ class UidNSTester {
     ReapChild(cpid2);
     
     return 0;
+  }
+
+  // TEST2:
+  // We test CAPABILITY/permission structure of Parent/Child UID namespace. 
+  // 1. Clone C1 (PID1) in a new UID_NS_1. 
+  // 2. Clone C2 (PID2) in a new UID_NS_2. 
+  // 3. Validate that Parent can setns and map to C1 UID_NS.
+  // 4. Validate that C2 cannot setns to map to C1 UID_NS.
+  int Test2UidNS(void) {
+    pid_t pid_my = getpid();
+    uid_t uid_my = geteuid();
+
+    // Clone C1. && C2.
+    pid_t c1pid = Clone2NS(0);
+
+    ostringstream oss;
+    oss << "/proc/" << c1pid << "/ns/user";
+    LOG(INFO) << "Parent-PID " << pid_my << " opening file " << oss.str();
+
+    // Attempt to join the user namespace specified by /proc/c1pid/ns/user
+    int fd = open(oss.str().c_str(), O_RDONLY);
+    if (fd < 0)
+      ProcError("open");
+
+    pid_t c2pid = Clone2NS(fd);
+
+    LOG(INFO) << "Parent-PID " << pid_my << " eUID " << uid_my
+              << " C1-PID " << c1pid << " C2-PID " << c2pid;
+
+    CHECK_EQ(TestSetNS("Parent", fd), 0);
+
+    LOG(INFO) << "Parent-PID " << pid_my << " eUID " << uid_my << " quitting...";
+    
+    ReapChild(c2pid);
+    ReapChild(c1pid);
+
+    close(fd);
+
+    return 0;
+  }
+
+ private:
+  // * CLONE_NEWUSER: Creates a new UID NS. New new UID namespace. 
+  //   Allows one to even have root privileges in the new namespace.
+  // * SIGCHLD: The low byte of flags contains the number of the termination 
+  //   signal sent to the parent when the child dies.
+  static constexpr int CLONE_FLAGS = CLONE_NEWUSER | SIGCHLD;
+  static constexpr size_t READ=0; 
+  static constexpr size_t WRITE=1;
+  static constexpr size_t STACK_SIZE = 1024*1024;
+  
+  static char* new_stack(void) {
+    char *p = new char[STACK_SIZE];
+    return (p + STACK_SIZE);
   }
 
   static int SignalUpdateUidMapDone(int *pipe_fd, pid_t pid, uid_t uid) {
@@ -100,22 +155,12 @@ class UidNSTester {
     return 0;
   }
 
-  static char* new_stack(void) {
-    char *p = new char[STACK_SIZE];
-    return (p + STACK_SIZE);
-  }
-
- private:
-  static constexpr size_t READ=0; 
-  static constexpr size_t WRITE=1;
-  static constexpr size_t STACK_SIZE = 1024*1024;
-  
   static int UpdateUidMap(pid_t cpid, uid_t uid) {
     ostringstream oss;
     oss << "/proc/" << cpid << "/uid_map";
 
     pid_t pid = getpid();
-    uid_t uid_parent = getuid();
+    uid_t uid_parent = geteuid();
 
     LOG(INFO) << "Parent " << pid << " uid_parent " << uid_parent
               << " writing for uid " << uid << " uid_map file " << oss.str();
@@ -147,9 +192,7 @@ class UidNSTester {
     close(pipe_fd[WRITE]);
 
     pid_t pid_my = getpid();
-    uid_t uid_my = getuid();
-    LOG(INFO) << "PID " << pid_my << " UID " << uid_my 
-              << " reading pid_sib & uid_sib from pipe";
+    LOG(INFO) << "PID " << pid_my << " reading pid_sib & uid_sib from pipe";
 
     // Read the pid, uid coming from parent
     uid_t uid_sib;
@@ -162,11 +205,11 @@ class UidNSTester {
     if (read(pipe_fd[READ], &uid_sib, uid_sib_siz) < uid_sib_siz) {
       ProcError("read-uid");
     }
-
     close(pipe_fd[READ]);
 
-    LOG(INFO) << "PID " << pid_my << " read "
-              << " UID_SIB " << uid_sib << " PID_SIB " << pid_sib;
+    uid_t uid_my = geteuid();
+    LOG(INFO) << "PID " << pid_my << "eUID " << uid_my
+              << " read eUID_SIB " << uid_sib << " PID_SIB " << pid_sib;
 
     ostringstream oss;
     oss << "/proc/" << pid_sib << "/uid_map";
@@ -211,22 +254,81 @@ class UidNSTester {
     return 0;
   }
 
+  static int TestSetNS(const char* name, int fd) {
+    char path[PATH_MAX];
+    ssize_t s;
+
+    // Display caller's user namespace ID
+
+    s = readlink("/proc/self/ns/user", path, PATH_MAX);
+    if (s < 0)
+      ProcError("readlink");
+
+    LOG(INFO) << name << ": readlink(\"/proc/self/ns/user\") ==> " << path;
+
+    int status = setns(fd, CLONE_NEWUSER);
+    LOG_IF(ERROR, (status < 0)) << "setns failed: " << strerror(errno);
+    return status;
+  }
+
+  static int Uid2NSFunc(void *arg) {
+    pid_t pid_my = getpid();
+    uid_t uid_my = geteuid();
+
+    // C1: just wait for 100ms to allow Parent and C2 to run tests
+    if (arg == NULL) {
+      LOG(INFO) << "C1-PID " << pid_my << " eUID " << uid_my
+                << " waiting 100ms to allow Parent/C1 complete test";
+      usleep(100000);
+      LOG(INFO) << "C1-PID " << pid_my << " eUID " << uid_my << " quitting...";
+      return 0;
+    }
+
+    int fd = reinterpret_cast<intptr_t>(arg);
+    
+    LOG(INFO) << "C2-PID " << pid_my << " eUID " << uid_my;
+
+    CHECK_LT(TestSetNS("C2", fd), 0);
+
+    LOG(INFO) << "C2-PID " << pid_my << " eUID " << uid_my << " quitting...";
+    
+    return 0;
+  }
+
   // PID Clone NS and return PID of the child in the parent NS 
-  static pid_t CloneUidNS(int *pipe_fd) {
+  static pid_t CloneNS(int *pipe_fd) {
     // Create a child that has its own PID namespace;
     // the child commences execution in childFunc()
-    pid_t child_pid = clone(UidNSFunc, 
-                            // Points to start of downwardly growing stack
-                            new_stack(),
-                            CLONE_NEWUSER | SIGCHLD, pipe_fd);
-    if (child_pid < 0) {
+    pid_t cpid = clone(UidNSFunc, 
+                       // Points to start of downwardly growing stack
+                       new_stack(), CLONE_FLAGS, pipe_fd);
+    if (cpid < 0) {
       ProcError("clone");
     }
 
-    LOG(INFO) << "PID: Parent " << getpid() << ": Clone Child " << child_pid 
+    LOG(INFO) << "PID: Parent " << getpid() << ": Clone Child " << cpid 
               << ": GrandParent " << getppid();
 
-    return child_pid;
+    return cpid;
+  }
+
+  // PID Clone NS and return PID of the child in the parent NS 
+  static pid_t Clone2NS(int fd) {
+    // Create a child that has its own PID namespace;
+    // the child commences execution in childFunc()
+    intptr_t efd = fd;
+    pid_t cpid = clone(Uid2NSFunc, 
+                       // Points to start of downwardly growing stack
+                       new_stack(), CLONE_FLAGS, 
+                       reinterpret_cast<void *>(efd));
+    if (cpid < 0) {
+      ProcError("clone");
+    }
+
+    LOG(INFO) << "PID: Parent " << getpid() << ": Clone Child " << cpid 
+              << ": GrandParent " << getppid();
+
+    return cpid;
   }
   
   static void ProcError(const char *str) {
@@ -282,7 +384,9 @@ main(int argc, char *argv[])
   // to pass two usernames which the program should validate (using getpwnam)
   // and then run the test. Since getpwnam() has bug in ubuntu/trusty, we 
   // are taking this disgusting short cut.
-  uid_ns.TestUidNS(0, 1001);
+  uid_ns.Test1UidNS(0, 1001);
+
+  uid_ns.Test2UidNS();
   
   return 0;
 }
