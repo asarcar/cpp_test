@@ -17,8 +17,9 @@
 ######################################
 #           SubDirectories           #
 ######################################
-add_subdirectory(basic)
-add_subdirectory(concur)
-add_subdirectory(ds)
-add_subdirectory(math)
-add_subdirectory(misc)
+# add_library(ds_utils skip_lists.cc)
+# target_link_libraries(ds_utils basic_utils)
+
+if (CMAKE_CUSTOM_UNIT_TESTS)
+  add_subdirectory(tests)
+endif (CMAKE_CUSTOM_UNIT_TESTS)
