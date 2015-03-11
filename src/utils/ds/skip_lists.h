@@ -28,10 +28,13 @@
 #define _UTILS_DS_SKIP_LISTS_H_
 
 // C++ Standard Headers
-#include <array>                    // array
+#include <array>            // array
+#include <functional>       // std::function
+#include <random>           // std::distribution, random engine, ...
 // C Standard Headers
 // Google Headers
 // Local Headers
+#include "utils/basic/fassert.h"
 
 //! @addtogroup utils
 //! @{
@@ -39,73 +42,247 @@
 namespace asarcar { namespace utils {
 //-----------------------------------------------------------------------------
 
-// @fn         NumOnes
+// @fn         Ones
 // @param[in]  N  
 // @returns    # of 1s in Numbers
-constexpr uint32_t NumOnes(const uint32_t N) {
-  return ((N==0) ? 0 : (NumOnes(N & (N-1)) + 1));
+constexpr uint32_t Ones(const uint32_t N) {
+  return ((N==0) ? 0 : (Ones(N & (N-1)) + 1));
 }
 
-// @fn         MsbPos
+// @fn         MsbOnePos = Floor(log2(N)) + 1
 // @param[in]  N
 // @returns    msb position starting with lsb position indexed as 1
-constexpr uint32_t MsbPos(const uint32_t N) {
-  return ((N==0) ? 0 : (MsbPos(N >> 1) + 1));
+constexpr uint32_t MsbOnePos(const uint32_t N) {
+  return ((N==0) ? 0 : (MsbOnePos(N >> 1) + 1));
 }
 
-// @fn         LogBaseTwoCeiling
-// @param[in]  N (assumed N > 0)
-// @returns    Ceiling(log(N))
-constexpr uint32_t LogBaseTwoCeiling(const uint32_t N) {
-  return ((NumOnes(N) <= 1) ? MsbPos(N) : (MsbPos(N) + 1)); 
+// @fn         TrailingOnes
+// @param[in]  N
+// @returns    Gives the # of contiguous trailing 1s in the number
+constexpr uint32_t TrailingOnes(const uint32_t N) {
+    return (((N & 0x00000001) == 0) ? 0 : TrailingOnes(N>>1) + 1);
 }
+
+// Forward Declaration
+template <typename T, uint32_t MaxNum>
+class SkipListCIter;
 
 template <typename T, uint32_t MaxNum>
 class SkipList {
  public:
+  using SkipListPtr=SkipList<T,MaxNum> *;
 
   static constexpr uint32_t MaxLevel(void) {
-    return LogBaseTwoCeiling(MaxNum);
+    static_assert(MaxNum <= (1 << 16), 
+                  "Maximum entries supported for SkipList limited to 2^16 entries"); 
+    return MsbOnePos(MaxNum);
   }
 
   class Node;
-  using NodePtrC = Node * const;
+  using NodePtr = Node*;
+  using ValCRef  = const T&;
 
   class Node {
    public:
+    virtual ~Node() {}
     virtual uint32_t Size(void) const = 0;
-    virtual NodePtrC Next(uint32_t index) = 0;
-    virtual T& Value(void) = 0;
+    virtual NodePtr& Next(uint32_t index) = 0;
+    virtual ValCRef  Value(void) const = 0;
   };
 
   template <uint32_t Level>  
   class ValNode : public Node {
    public:
-    using NodeArray = std::array<Node*, Level>;
-
-    ValNode(const T&& val) : Node{}, _val{val} {}
+    using ValNodePtr = ValNode *;
+    // Value Initialization of Array _next
+    ValNode(T&& val) : Node{}, _val{std::move(val)}, _next{} {}
+    ValNode(const T& val) : Node{}, _val{val} {}
+    
+    // Override Methods
     uint32_t Size(void) const override {
       return _next.size();
     }
-    NodePtrC Next(uint32_t index) override {
+    NodePtr& Next(uint32_t index) override {
       return _next.at(index);
     }
-    T& Value(void) override {
+    ValCRef Value(void) const override {
       return _val;
     }
+
    private:
-    T          _val;
-    NodeArray  _next;
+    using NodePtrArray = std::array<NodePtr, Level>;
+
+    T             _val;
+    NodePtrArray  _next;
   };
 
-  SkipList() : _head{T()} {}
+  SkipList() : _head{T{}}, _seed{std::random_device{}()},
+    _random{std::bind(std::uniform_int_distribution<uint32_t>
+                      {0, MaxLevel()}, 
+                      std::default_random_engine{_seed})} {} 
+  ~SkipList() {
+    // Forward Iterate through all nodes and free up resources
+  }
+  inline NodePtr Head(void) {return &_head;}
 
-  NodePtrC Head(void) {
-    return &_head;
+  // Iterator
+  friend class SkipListCIter<T, MaxNum>;
+  using ItC = SkipListCIter<T, MaxNum>;
+
+  inline ItC begin(void) {return ItC{this};}
+  inline ItC end(void) {return ItC{this, nullptr};}
+
+  // Operations: Find/Insert/Remove...
+  ItC Find(const T& val) {
+    NodePtr np=Head();
+    for(int level = static_cast<int>(MaxLevel()) - 1; level >= 0; --level) {
+      uint32_t lvl = static_cast<uint32_t>(level);
+      for(;np->Next(lvl) != nullptr && np->Next(lvl)->Value() < val; 
+          np = np->Next(lvl));
+      if (np->Next(lvl) != nullptr && np->Next(lvl)->Value() == val) 
+        return ItC{this, np->Next(lvl)};
+    }
+    return end();
   }
 
+  // Inserts element to SkipList if Node with Value does not exist.
+  // Returns Iterator to the element (if its exists to the new node else to existing node)
+  ItC Insert(T&& val) {
+    // Cache Nodes at every level whose next is insert node so we can insert if needed
+    std::array<NodePtr, MaxLevel()> nodeptrs;
+    NodePtr np=Head();
+
+    for(int level = static_cast<int>(MaxLevel()) - 1; level >= 0; --level) {
+      uint32_t lvl = static_cast<uint32_t>(level);
+      for(;np->Next(lvl) != nullptr && np->Next(lvl)->Value() < val; 
+          np = np->Next(lvl));
+      if ((np->Next(lvl) != nullptr) && (np->Next(lvl)->Value() == val))
+        return ItC{this, np->Next(lvl)};
+      // np is the previous node candidate. cache it.
+      // i.e. np == head || np->Value < val AND
+      //      np->Next(lvl) == nullptr OR np->Next(lvl)->Value > val
+      nodeptrs[lvl] = np;
+    }
+
+    // create a new node with a random number of levels 
+    NodePtr insp = NewNode(std::move(val));
+    // link node with the previous nodes in the list
+    // at all levels this node should participate in the linked list
+    for(uint32_t lev = 0; lev < insp->Size(); ++lev) {
+      NodePtr tmp = nodeptrs[lev];
+      insp->Next(lev) = tmp->Next(lev);
+      tmp->Next(lev) = insp;
+    }
+
+    return ItC{this, insp};
+  }
+
+  // For repeatable & predictable node level generation, we 
+  // generate the same seeds for random number when testing 
+  // such that same random number is generated every time
+  void SetPredictableNodeLevel(void) {
+    _seed = kFixedCostSeedForRandomEngine;
+    _random = std::bind(std::uniform_int_distribution<uint32_t>
+                        {0, MaxLevel()}, 
+                        std::default_random_engine{_seed}); 
+  }
  private:
-  ValNode<MaxLevel()> _head;
+  ValNode<MaxLevel()>           _head;
+  uint32_t                      _seed;
+  std::function<uint32_t(void)> _random;
+                         
+  //! Fixed seed generates predictable MC runs when running test SW or debugging
+  const static uint32_t kFixedCostSeedForRandomEngine = 13607; 
+
+  NodePtr NewNode(T&& val) {
+    uint32_t level = NodeLevel();
+    
+    FASSERT(level >= 1 && level <= MaxLevel());
+    NodePtr np;
+
+    switch(level) {
+      case 1 : np = new ValNode<1>{std::move(val)}; break;
+      case 2 : np = new ValNode<2>{std::move(val)}; break;
+      case 3 : np = new ValNode<3>{std::move(val)}; break;
+      case 4 : np = new ValNode<4>{std::move(val)}; break;
+      case 5 : np = new ValNode<5>{std::move(val)}; break;
+      case 6 : np = new ValNode<6>{std::move(val)}; break;
+      case 7 : np = new ValNode<7>{std::move(val)}; break;
+      case 8 : np = new ValNode<8>{std::move(val)}; break;
+      case 9 : np = new ValNode<9>{std::move(val)}; break;
+      case 10: np = new ValNode<10>{std::move(val)}; break;
+      case 11: np = new ValNode<11>{std::move(val)}; break;
+      case 12: np = new ValNode<12>{std::move(val)}; break;
+      case 13: np = new ValNode<13>{std::move(val)}; break;
+      case 14: np = new ValNode<14>{std::move(val)}; break;
+      case 15: np = new ValNode<15>{std::move(val)}; break;
+      default: np = new ValNode<16>{std::move(val)}; break;
+    }
+
+    return np;
+  }
+
+  static inline void DeleteNode(NodePtr node_p) {
+    delete node_p;
+    return;
+  }
+
+  // @fn         NodeLevel
+  // @details    Provides a number between 1 and MaxLevel() with a 
+  //             specific probability distribution - refer below.
+  //             Generates a random number and measures the number of 
+  //             contiguous trailing 1s in the generated number.
+  //             This yield a number with probability distribution, such that:
+  //             Level = 1 i.e. default     = 1
+  //             Level = 2 i.e. prob(num=1) = 1/2
+  //             Level = 3 i.e. prob(num=2) = 1/4
+  //             Level = k i.e. prob(num=k) = 1/2^k; ... 
+  // @returns    Level
+  uint32_t inline NodeLevel(void) {
+    uint32_t num = _random(); 
+    uint32_t level = TrailingOnes(num) + 1;
+    return (level <= MaxLevel() ? level : MaxLevel());
+  }
+};
+
+// Forward Iterator for SkipLists. TODO: Should have READ ONLY access 
+// to key (i.e. key attribute of T).
+template <typename T, uint32_t MaxNum>
+class SkipListCIter {
+ public:
+  using SList       = SkipList<T, MaxNum>;
+  using SkipListPtr = typename SList::SkipListPtr;
+  using NodePtr     = typename SList::NodePtr;
+  using ItC         = typename SList::ItC;
+  SkipListCIter(SkipListPtr slp) : 
+      _sl{slp}, _cur{slp->Head()->Next(0)} {}
+  SkipListCIter(SkipListPtr slp, NodePtr np) : 
+      _sl{slp}, _cur{np} {}
+  inline const T& operator*() {
+    FASSERT(_cur != nullptr);
+    return _cur->Value();
+  }
+  inline ItC& operator++() {
+    FASSERT(_cur != nullptr);
+    _cur = _cur->Next(0);
+    return *this;
+  }
+  inline ItC& Next(uint32_t i) {
+    FASSERT(_cur != nullptr);
+    FASSERT(_cur.Size() > i);
+    FASSERT(SList::MaxLevel() > i);
+    _cur = _cur->Next(i);
+    return *this;
+  }
+  inline bool operator==(const ItC &other) {
+    return (this->_sl == other._sl && this->_cur == other._cur);
+  }
+  inline bool operator!=(const ItC &other) {
+    return !this->operator==(other);
+  }
+ private:
+  SkipListPtr _sl;
+  NodePtr     _cur;
 };
 
 //-----------------------------------------------------------------------------

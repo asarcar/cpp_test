@@ -41,23 +41,31 @@ class SkipListTester {
 
 void SkipListTester::BitComputeTest(void) {
   constexpr uint32_t N = 0x01011001;
-  constexpr uint32_t O = NumOnes(N);
-  constexpr uint32_t M = MsbPos(N);
-  constexpr uint32_t L = LogBaseTwoCeiling(N);
+  constexpr uint32_t O = Ones(N);
+  constexpr uint32_t M = MsbOnePos(N);
 
-  LOG(INFO) << "N=" << N << ": O="<< O << ": M=" << M << ": L=" << L;
+  LOG(INFO) << "N=" << hex << N << dec << ": O="<< O << ": M=" << M;
   CHECK_EQ(O, 4);
   CHECK_EQ(M, 25);
-  CHECK_EQ(L, 26);
-  CHECK_EQ(LogBaseTwoCeiling(0x01000000), 25);
-}
+  CHECK_EQ(MsbOnePos(0x01000000), 25);
+
+  constexpr uint32_t N1 = 0x00C0CFDB;
+  constexpr uint32_t T1 = TrailingOnes(N1);
+  constexpr uint32_t N2 = 0x00C0CFDA;
+  constexpr uint32_t T2 = TrailingOnes(N2);
+
+  LOG(INFO) << "N1=" << hex << N1 << dec <<": T1="<< T1 
+            << ": N2=" << hex << N2 << dec << ": T2=" << T2;
+  CHECK_EQ(T1, 2);
+  CHECK_EQ(T2, 0);
+} 
 
 void SkipListTester::NoNodeTest(void) {
   using SkipListType=SkipList<int,1>;
   SkipListType s;
   CHECK_EQ(s.MaxLevel(), 1);
   
-  SkipListType::NodePtrC h = s.Head();
+  SkipListType::NodePtr h = s.Head();
   CHECK_EQ(h->Size(), 1);
 
   for(uint32_t i=0; i<h->Size(); ++i) {
@@ -67,6 +75,36 @@ void SkipListTester::NoNodeTest(void) {
 }
 
 void SkipListTester::OneNodeTest(void) {
+  constexpr uint32_t N = 3;
+  using SkipListType=SkipList<int,N>;
+  SkipListType s;
+  // Validate MaxLevel = Ceiling(log2(N))
+  CHECK_EQ(s.MaxLevel(), 2);
+  
+  SkipListType::NodePtr h = s.Head();
+  CHECK_EQ(h->Size(), 2);
+
+  // Validate empty list
+  using ItC = SkipListType::ItC;
+  ItC itb = s.begin();
+  ItC ite = s.end();
+  CHECK(itb == ite);
+  
+  // Valudate Insert Works correctly
+  s.Insert(10);
+  itb = s.begin();
+  ite = s.end();
+  CHECK(itb != ite);
+  CHECK_EQ(*itb, 10);
+
+  // Validate iterator increments correctly
+  CHECK(++itb == ite);
+
+  // Validate Find Works correctly
+  itb = s.begin();
+  CHECK(s.Find(10) == itb);
+  CHECK(s.Find(20) == ite);
+
   return;
 }
 
