@@ -61,7 +61,7 @@ void SkipListTester::BitComputeTest(void) {
 } 
 
 void SkipListTester::NoNodeTest(void) {
-  using SkipListType=SkipList<int,1>;
+  using SkipListType=SkipList<uint32_t,1>;
   SkipListType s;
   CHECK_EQ(s.MaxLevel(), 1);
   
@@ -75,8 +75,11 @@ void SkipListTester::NoNodeTest(void) {
 }
 
 void SkipListTester::OneNodeTest(void) {
-  constexpr uint32_t N = 3;
-  using SkipListType=SkipList<int,N>;
+  constexpr int N = 3;
+  using SkipListType=SkipList<uint32_t,N>;
+  using ItC   = SkipListType::ItC;
+  using ModPr = SkipListType::ModPr;
+
   SkipListType s;
   // Validate MaxLevel = Ceiling(log2(N))
   CHECK_EQ(s.MaxLevel(), 2);
@@ -85,17 +88,18 @@ void SkipListTester::OneNodeTest(void) {
   CHECK_EQ(h->Size(), 2);
 
   // Validate empty list
-  using ItC = SkipListType::ItC;
+
   ItC itb = s.begin();
   ItC ite = s.end();
   CHECK(itb == ite);
   
   // Valudate Insert Works correctly
-  s.Insert(10);
+  ModPr r = s.Emplace(10);
+  CHECK_EQ(*r.first, 10); CHECK_EQ(r.second, true);
   itb = s.begin();
+  CHECK(r.first == itb);
   ite = s.end();
   CHECK(itb != ite);
-  CHECK_EQ(*itb, 10);
 
   // Validate iterator increments correctly
   CHECK(++itb == ite);
@@ -103,12 +107,64 @@ void SkipListTester::OneNodeTest(void) {
   // Validate Find Works correctly
   itb = s.begin();
   CHECK(s.Find(10) == itb);
-  CHECK(s.Find(20) == ite);
+
+  ModPr pr = s.Remove(5);
+  CHECK(pr.second == false && pr.first == itb);
+
+  pr = s.Remove(*itb);
+  CHECK(pr.second == true && pr.first == ite);
 
   return;
 }
 
 void SkipListTester::FullTest(void) {
+  constexpr int Num = 15;
+  using SkipListType=SkipList<uint32_t,Num>;
+  using ItC   = SkipListType::ItC;
+  using ModPr = SkipListType::ModPr;
+
+  SkipListType s;
+  // Validate MaxLevel = Ceiling(log2(Num))
+  CHECK_EQ(s.MaxLevel(), 4);
+
+  constexpr int N = 10, M = 9;
+  array<uint32_t, N> n {21, 10, 16, 23, 10, 81, 7, 72, 15, 44};
+  array<uint32_t, M> m {7, 10, 15, 16, 21, 23, 44, 72, 81};
+  for(int i=0;i<N;++i)
+    s.Emplace(uint32_t{n.at(i)});
+
+  // Check elements were added in sorted order
+  ItC itb = s.begin(); 
+  ItC ite = s.end(); 
+  int i=0;
+  for(ItC itx = itb; itx != ite; ++itx, ++i) {
+    LOG(INFO) << "Node: pos=" << i << ": lvl=" << itx->Size()
+              << ": val=" << itx->Value();
+    for (int j=0; j < static_cast<int>(itx->Size()); j++) {
+      LOG(INFO) << "  Level=" << j << ": next=" 
+                << hex << "0x" << itx->Next(j) << dec;
+    }
+    CHECK_EQ(*itx, m.at(i));
+  }
+
+  constexpr int R = 4, T = 4;
+  array<uint32_t, R> r {21, 16, 10, 44};
+  array<uint32_t, T> t {23, 23, 15, 72};
+  for(int i=0; i<R; ++i) {
+    ModPr pr = s.Remove(r.at(i));
+    CHECK(pr.second == true && pr.first != s.end() && *pr.first == t.at(i));
+  }
+
+  ModPr pr = s.Remove(81);
+  CHECK(pr.second == true && pr.first == s.end());
+
+  constexpr int U = 4;
+  array<uint32_t, U> u {7, 15, 23, 72};
+  itb = s.begin(); ite = s.end();
+  i=0;
+  for(ItC itx = itb; itx != ite; ++itx, ++i)
+    CHECK_EQ(*itx, u.at(i));
+         
   return;
 }
 

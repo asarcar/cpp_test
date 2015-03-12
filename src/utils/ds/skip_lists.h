@@ -31,6 +31,7 @@
 #include <array>            // array
 #include <functional>       // std::function
 #include <random>           // std::distribution, random engine, ...
+#include <utility>          // std::pair
 // C Standard Headers
 // Google Headers
 // Local Headers
@@ -116,9 +117,11 @@ class SkipList {
     NodePtrArray  _next;
   };
 
-  SkipList() : _head{T{}}, _seed{std::random_device{}()},
+  SkipList() : 
+    _head{T{}}, _seed{std::random_device{}()},
     _random{std::bind(std::uniform_int_distribution<uint32_t>
-                      {0, MaxLevel()}, 
+                      // random number between 0 to 2^MaxLevel()-1
+                      {0, static_cast<uint32_t>(static_cast<int>(1 >> MaxLevel())-1)}, 
                       std::default_random_engine{_seed})} {} 
   ~SkipList() {
     // Forward Iterate through all nodes and free up resources
@@ -127,7 +130,8 @@ class SkipList {
 
   // Iterator
   friend class SkipListCIter<T, MaxNum>;
-  using ItC = SkipListCIter<T, MaxNum>;
+  using ItC   = SkipListCIter<T, MaxNum>;
+  using ModPr = std::pair<ItC,bool>;
 
   inline ItC begin(void) {return ItC{this};}
   inline ItC end(void) {return ItC{this, nullptr};}
@@ -135,8 +139,7 @@ class SkipList {
   // Operations: Find/Insert/Remove...
   ItC Find(const T& val) {
     NodePtr np=Head();
-    for(int level = static_cast<int>(MaxLevel()) - 1; level >= 0; --level) {
-      uint32_t lvl = static_cast<uint32_t>(level);
+    for(int lvl = static_cast<int>(MaxLevel()) - 1; lvl >= 0; --lvl) {
       for(;np->Next(lvl) != nullptr && np->Next(lvl)->Value() < val; 
           np = np->Next(lvl));
       if (np->Next(lvl) != nullptr && np->Next(lvl)->Value() == val) 
@@ -145,19 +148,18 @@ class SkipList {
     return end();
   }
 
-  // Inserts element to SkipList if Node with Value does not exist.
-  // Returns Iterator to the element (if its exists to the new node else to existing node)
-  ItC Insert(T&& val) {
+  // Constructs element in place and Inserts to SkipList if Value does not exist.
+  // Returns <Iterator,false> if element exists (insert failed) else <iterator, true>
+  ModPr Emplace(T&& val) {
     // Cache Nodes at every level whose next is insert node so we can insert if needed
     std::array<NodePtr, MaxLevel()> nodeptrs;
     NodePtr np=Head();
 
-    for(int level = static_cast<int>(MaxLevel()) - 1; level >= 0; --level) {
-      uint32_t lvl = static_cast<uint32_t>(level);
+    for(int lvl = static_cast<int>(MaxLevel()) - 1; lvl >= 0; --lvl) {
       for(;np->Next(lvl) != nullptr && np->Next(lvl)->Value() < val; 
           np = np->Next(lvl));
       if ((np->Next(lvl) != nullptr) && (np->Next(lvl)->Value() == val))
-        return ItC{this, np->Next(lvl)};
+        return ModPr{ItC{this, np->Next(lvl)},false};
       // np is the previous node candidate. cache it.
       // i.e. np == head || np->Value < val AND
       //      np->Next(lvl) == nullptr OR np->Next(lvl)->Value > val
@@ -168,13 +170,48 @@ class SkipList {
     NodePtr insp = NewNode(std::move(val));
     // link node with the previous nodes in the list
     // at all levels this node should participate in the linked list
-    for(uint32_t lev = 0; lev < insp->Size(); ++lev) {
-      NodePtr tmp = nodeptrs[lev];
-      insp->Next(lev) = tmp->Next(lev);
-      tmp->Next(lev) = insp;
+    for(int lvl = 0; lvl < static_cast<int>(insp->Size()); ++lvl) {
+      NodePtr tmp = nodeptrs[lvl];
+      insp->Next(lvl) = tmp->Next(lvl);
+      tmp->Next(lvl) = insp;
     }
 
-    return ItC{this, insp};
+    return ModPr{ItC{this, insp}, true};
+  }
+
+  inline ModPr Insert(T&& val) { return Emplace(std::move(val)); }
+
+  // Removes element and returns the first element after the remove candidate 
+  // followed by bool (TRUE) if candidate was indeed removed
+  ModPr Remove(const T& val) {
+    // Cache Nodes at every level whose next is insert node so we can insert if needed
+    std::array<NodePtr, MaxLevel()> nodeptrs;
+    NodePtr np=Head();
+
+    for(int lvl = static_cast<int>(MaxLevel()) - 1; lvl >= 0; --lvl) {
+      for(;np->Next(lvl) != nullptr && np->Next(lvl)->Value() < val; 
+          np = np->Next(lvl));
+      // np is the previous node candidate. cache it.
+      // i.e. np == head || np->Value < val AND
+      //      np->Next(lvl) == nullptr OR np->Next(lvl)->Value >= val
+      // np->Next(lvl) == nullptr OR np->Next(lvl)->Value() >= val
+      nodeptrs[lvl] = np;
+    }
+
+    NodePtr rem=np->Next(0);
+    // Candidate Exists i.e. np->Next(0) == val otherwise not
+    if (rem == nullptr || rem->Value() != val)
+      return ModPr{ItC{this, rem}, false};
+
+    // 1. Remove node from all the previous nodes in the list
+    //    at all levels of this node.
+    // 2. Delete the node
+    for(int lvl = 0; lvl < static_cast<int>(rem->Size()); ++lvl)
+      nodeptrs[lvl]->Next(lvl) = rem->Next(lvl);
+    ModPr res{ItC{this, rem->Next(0)}, true};
+    DeleteNode(rem);
+    
+    return res;
   }
 
   // For repeatable & predictable node level generation, we 
@@ -279,6 +316,9 @@ class SkipListCIter {
   }
   inline bool operator!=(const ItC &other) {
     return !this->operator==(other);
+  }
+  inline NodePtr operator->(void) {
+    return this->_cur;
   }
  private:
   SkipListPtr _sl;
