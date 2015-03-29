@@ -14,3 +14,4 @@
 
 # Author: Arijit Sarcar <sarcar_a@yahoo.com>
 add_ctest_fn(skip_lists)
+add_ctest_fn(treap)

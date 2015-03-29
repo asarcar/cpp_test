@@ -44,7 +44,7 @@ void SkipListTester::BitComputeTest(void) {
   constexpr uint32_t O = Ones(N);
   constexpr uint32_t M = MsbOnePos(N);
 
-  LOG(INFO) << "N=" << hex << N << dec << ": O="<< O << ": M=" << M;
+  DLOG(INFO) << "N=" << hex << N << dec << ": O="<< O << ": M=" << M;
   CHECK_EQ(O, 4);
   CHECK_EQ(M, 25);
   CHECK_EQ(MsbOnePos(0x01000000), 25);
@@ -54,8 +54,8 @@ void SkipListTester::BitComputeTest(void) {
   constexpr uint32_t N2 = 0x00C0CFDA;
   constexpr uint32_t T2 = TrailingOnes(N2);
 
-  LOG(INFO) << "N1=" << hex << N1 << dec <<": T1="<< T1 
-            << ": N2=" << hex << N2 << dec << ": T2=" << T2;
+  DLOG(INFO) << "N1=" << hex << N1 << dec <<": T1="<< T1 
+             << ": N2=" << hex << N2 << dec << ": T2=" << T2;
   CHECK_EQ(T1, 2);
   CHECK_EQ(T2, 0);
 } 
@@ -133,17 +133,13 @@ void SkipListTester::FullTest(void) {
   for(int i=0;i<N;++i)
     s.Emplace(uint32_t{n.at(i)});
 
+  DLOG(INFO) << "SkipList null+{21, 10, 16, 23, 10, 81, 7, 72, 15, 44}:" << s;
+
   // Check elements were added in sorted order
   ItC itb = s.begin(); 
   ItC ite = s.end(); 
   int i=0;
   for(ItC itx = itb; itx != ite; ++itx, ++i) {
-    LOG(INFO) << "Node: pos=" << i << ": lvl=" << itx->Size()
-              << ": val=" << itx->Value();
-    for (int j=0; j < static_cast<int>(itx->Size()); j++) {
-      LOG(INFO) << "  Level=" << j << ": next=" 
-                << hex << "0x" << itx->Next(j) << dec;
-    }
     CHECK_EQ(*itx, m.at(i));
   }
 
@@ -154,6 +150,8 @@ void SkipListTester::FullTest(void) {
     ModPr pr = s.Remove(r.at(i));
     CHECK(pr.second == true && pr.first != s.end() && *pr.first == t.at(i));
   }
+
+  DLOG(INFO) << "SkipList s-{21, 16, 10, 44}:" << s;
 
   ModPr pr = s.Remove(81);
   CHECK(pr.second == true && pr.first == s.end());
