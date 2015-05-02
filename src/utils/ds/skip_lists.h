@@ -24,7 +24,14 @@
 //!         - Find/Modify: in log(n) and FindNext in O(1).
 //!         - Memory: Per node is O(N(1+6x)) where x is % of memory consumed by
 //!           key/value versus 1 word of pointer.
-//!         - Allows to optimize access to frequently accessed data elements
+//!         - With High Probability (WHP) allows all R/W/M/C operation bounded
+//!           by lg(n). This distinguishes it from other stochastic dynamic data 
+//!           structures (e.g. BinarySearchTree, Treaps, etc.). The alternative 
+//!           also provide good expected computation time for typical operations. 
+//!           However, the probability distribution for outliars are not guaranteed.  
+//!           For guaranteed bounds, one may also use RedBlackTrees or AVL trees.
+//!           However, the constants hidden in those dynamic structures are 
+//!           not as good as skip lists (trade-off memory).
 //!         - Thread Safety: NOT thread safe. For concurrent R/RW access use
 //!           synchronization.
 //!         
