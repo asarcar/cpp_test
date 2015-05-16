@@ -57,23 +57,23 @@
 namespace asarcar { namespace utils {
 //-----------------------------------------------------------------------------
 
-// @fn         Ones
-// @param[in]  N  
-// @returns    # of 1s in Numbers
+//! @fn         Ones
+//! @param[in]  N  
+//! @returns    # of 1s in Numbers
 constexpr uint32_t Ones(const uint32_t N) {
   return ((N==0) ? 0 : (Ones(N & (N-1)) + 1));
 }
 
-// @fn         MsbOnePos = Floor(log2(N)) + 1
-// @param[in]  N
-// @returns    msb position starting with lsb position indexed as 1
+//! @fn         MsbOnePos = Floor(log2(N)) + 1
+//! @param[in]  N
+//! @returns    msb position starting with lsb position indexed as 1
 constexpr uint32_t MsbOnePos(const uint32_t N) {
   return ((N==0) ? 0 : (MsbOnePos(N >> 1) + 1));
 }
 
-// @fn         TrailingOnes
-// @param[in]  N
-// @returns    Gives the # of contiguous trailing 1s in the number
+//! @fn         TrailingOnes
+//! @param[in]  N
+//! @returns    Gives the # of contiguous trailing 1s in the number
 constexpr uint32_t TrailingOnes(const uint32_t N) {
     return (((N & 0x00000001) == 0) ? 0 : TrailingOnes(N>>1) + 1);
 }
