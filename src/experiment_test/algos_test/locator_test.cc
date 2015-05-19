@@ -21,7 +21,7 @@
 // Local Headers
 #include "utils/basic/basictypes.h"
 #include "utils/basic/init.h"
-#include "utils/algos/locator.h"
+#include "locator.h"
 
 using namespace asarcar;
 using namespace asarcar::utils;
@@ -43,6 +43,7 @@ void LocatorTester::TwoTest(void) {
   DLOG(INFO) << "a1={1}, a2={2}: rank 1..3";
   CHECK_EQ(LocateRankIndex(a1, a2, 1), 0);
   CHECK_EQ(LocateRankIndex(a1, a2, 2), 1);
+  DLOG(INFO) << "a1={1}, a2={2}: rank 2 expected 1 is " << LocateRankIndex(a1, a2, 2);
   CHECK(LocateRankIndex(a1, a2, 3) > 3);
 
   array<int, 0> a3={};
@@ -64,6 +65,7 @@ void LocatorTester::FullTest(void) {
   CHECK((LocateRankIndex(a4, a5, 6) == 2) || (LocateRankIndex(a4, a5, 6) == 7));
   CHECK((LocateRankIndex(a4, a5, 7) == 2) || (LocateRankIndex(a4, a5, 7) == 7));
   CHECK_EQ(LocateRankIndex(a4, a5, 8), 3);
+  DLOG(INFO) << "a4={2,3,4,5}, a5={1,2,3,4}: rank 8 expected 3 is " << LocateRankIndex(a4, a5, 8);
   CHECK(LocateRankIndex(a4, a5, 9) > 9);
 
   return;

@@ -13,10 +13,6 @@
 # limitations under the License.
 
 # Author: Arijit Sarcar <sarcar_a@yahoo.com>
+add_test_fn(zmq_hw_svr ${ZeroMQ_LIBRARY})
+add_test_fn(zmq_hw_clt ${ZeroMQ_LIBRARY})
 
-######################################
-#           SubDirectories           #
-######################################
-if (CMAKE_CUSTOM_UNIT_TESTS)
-  add_subdirectory(tests)
-endif (CMAKE_CUSTOM_UNIT_TESTS)

@@ -13,6 +13,7 @@
 # limitations under the License.
 
 # Author: Arijit Sarcar <sarcar_a@yahoo.com>
+add_subdirectory(algos_test)
 add_subdirectory(async_test)
 add_subdirectory(cast_test)
 add_subdirectory(file_cache_test)
@@ -31,3 +32,4 @@ add_subdirectory(rval_test)
 add_subdirectory(template_test)
 add_subdirectory(thread_test)
 add_subdirectory(udl_test)
+add_subdirectory(zmq_test)

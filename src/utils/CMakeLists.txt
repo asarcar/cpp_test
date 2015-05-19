@@ -17,7 +17,6 @@
 ######################################
 #           SubDirectories           #
 ######################################
-add_subdirectory(algos)
 add_subdirectory(basic)
 add_subdirectory(concur)
 add_subdirectory(ds)

@@ -37,6 +37,11 @@ project (CPP_MISC_TEST)
 # message("CMAKE_DOC_DIR is ${CMAKE_DOC_DIR}")
 
 ###############################################
+#                CMAKE settings               #
+###############################################
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules/")
+
+###############################################
 #                Build settings               #
 ###############################################
 #  (1) Debug: 
@@ -147,9 +152,19 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wl,--no-as-needed -pthread")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 
 # Set the compiler's include paths: 
-# 1) All includes are relative to base of source directories OR
-# 2) For Protobuf or other generated files from top of build directory
-include_directories(${CMAKE_SOURCE_DIR} ${CMAKE_BUILD_DIR})
+# All includes are relative to base of source directories
+include_directories(${CMAKE_SOURCE_DIR}) 
+##########################################################
+# FIND Packages, Include Directories, Set/Target Library #
+##########################################################
+# Protobuf package.
+find_package(Protobuf REQUIRED)
+# For Protobuf or other generated files from top of build directory
+include_directories(${CMAKE_BUILD_DIR})
+
+# Zero MQ
+find_package(ZeroMQ REQUIRED)
+include_directories(${ZeroMQ_INCLUDE_DIR})
 
 #######################################
 # Enable Dashboard Scripting or CTest #
@@ -232,9 +247,6 @@ function(add_ctest_fn test_name)
   endforeach(optional_arg)
   register_test(${tmpname})
 endfunction(add_ctest_fn)
-
-# Find the protobuf package.
-find_package(Protobuf REQUIRED)
 
 # protobuf_generate_cpp() provided by CMAKE 
 # 1) Does not allow tweaking --proto_path & --cpp_out args to protoc
