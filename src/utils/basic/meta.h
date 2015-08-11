@@ -53,6 +53,10 @@ constexpr bool IsSame(void) { return std::is_same<T,U>::value; }
 template <typename T>
 constexpr bool IsIntegral(void) { return std::is_integral<T>::value; }
 
+//! @brief is_pointer wrapper
+template <typename T>
+constexpr bool IsPointer(void) { return std::is_pointer<T>::value; }
+
 //! @brief is_base_of wrapper
 template <typename Base, typename Derived>
 constexpr bool IsBaseOf(void) { return std::is_base_of<Base,Derived>::value; }
