@@ -51,14 +51,14 @@ DEFINE_int32(num_reads_per_write, NUM_RDS_PER_WR,
              "number of reads for every write"); 
 class ValTest {
 public:
-  void op(rw_mutex::RwMode mode, int inc) {
+  void op(LockMode mode, int inc) {
     uint32_t rnd_val = _wfn();
     rw_lock_guard lck{_rwm, mode};
-    if (mode == rw_mutex::RwMode::WRITE)
+    if (mode == LockMode::EXCLUSIVE_LOCK)
       _v += inc;
     std::this_thread::sleep_for(std::chrono::milliseconds(rnd_val));
     LOG(INFO) << "TH " << hex << "0x" << this_thread::get_id() 
-              << ": OP=" << rw_mutex::disp_rw_mode(mode) 
+              << ": OP=" << mode
               << ": val=" << dec << _v 
               << ": after " << rnd_val << " millisecs";
     return;
@@ -92,11 +92,11 @@ int main(int argc, char *argv[]) {
   int cnt = 0;
 
   for (int i=0; i<FLAGS_num_threads; ++i) {
-    rw_mutex::RwMode mode = rw_mutex::RwMode::READ;
+    LockMode mode{LockMode::SHARE_LOCK};
     if (((i + 1) % num_rd_wr_quanta) == 0)
-      mode = rw_mutex::RwMode::WRITE;
+      mode = LockMode::EXCLUSIVE_LOCK;
 
-    th_pool.push_back(thread([&val_test](rw_mutex::RwMode mode, int inc) {
+    th_pool.push_back(thread([&val_test](LockMode mode, int inc) {
           val_test.op(mode, inc);
         }, mode, i));
   }   

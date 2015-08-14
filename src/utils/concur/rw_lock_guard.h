@@ -43,7 +43,7 @@ namespace asarcar { namespace utils { namespace concur {
 //! Behavior undefined if rw_mutex is destroyed before rw_lock_guard.
 class rw_lock_guard {
  public:
-  explicit rw_lock_guard(rw_mutex &rwm, rw_mutex::RwMode mode) : 
+  explicit rw_lock_guard(rw_mutex &rwm, LockMode mode) : 
       _rwm(rwm), _mode{mode} {
     _rwm.lock(_mode);
   }
@@ -55,7 +55,7 @@ class rw_lock_guard {
 
  private:
   rw_mutex&           _rwm;
-  rw_mutex::RwMode    _mode;
+  LockMode            _mode;
 };    
 
 //-----------------------------------------------------------------------------

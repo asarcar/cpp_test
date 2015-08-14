@@ -33,8 +33,8 @@
 
 namespace asarcar { namespace utils { namespace concur {
 //-----------------------------------------------------------------------------
-void rw_mutex::lock(RwMode mode) {
-  FASSERT(mode != RwMode::EMPTY);
+void rw_mutex::lock(LockMode mode) {
+  FASSERT(mode != LockMode::UNLOCK);
   std::thread::id my_th_id = std::this_thread::get_id();
 
   std::unique_lock<std::mutex> lck{_mutex};
@@ -53,21 +53,21 @@ void rw_mutex::lock(RwMode mode) {
       // 2.b. Current thread owning the lock is RD request and pending request
       //      is RD as well. Both can simultaneously enter the critical region.
       return ((this->_q_pending.front() == my_th_id) &&
-              ((this->_cur_mode == RwMode::EMPTY) || 
-               (this->_cur_mode == RwMode::READ && 
-                mode == RwMode::READ)));
+              ((this->_cur_mode == LockMode::UNLOCK) || 
+               (this->_cur_mode == LockMode::SHARE_LOCK && 
+                mode == LockMode::SHARE_LOCK)));
     });
 
   FASSERT(this->_q_pending.front() == my_th_id);
   _q_pending.pop_front();
   _v_owners.push_back(my_th_id);
 
-  if (mode == RwMode::WRITE) {
+  if (mode == LockMode::EXCLUSIVE_LOCK) {
     FASSERT(this->_num_readers == 0);
-    this->_cur_mode = RwMode::WRITE;
+    this->_cur_mode = LockMode::EXCLUSIVE_LOCK;
   } else {
     this->_num_readers++;
-    this->_cur_mode = RwMode::READ;
+    this->_cur_mode = LockMode::SHARE_LOCK;
   }
 
   LOG(INFO) << "rw_lock state =>" << *this << "<=" << std::endl;
@@ -80,13 +80,13 @@ void rw_mutex::unlock(void) {
 
   { // Begin: Critical Region
     std::lock_guard<std::mutex> lck{_mutex};
-    if (_cur_mode == RwMode::READ) {
+    if (_cur_mode == LockMode::SHARE_LOCK) {
       FASSERT(_num_readers >= 1);
       _num_readers--;
       if (_num_readers == 0)
-        _cur_mode = RwMode::EMPTY;
+        _cur_mode = LockMode::UNLOCK;
     } else {
-      _cur_mode = RwMode::EMPTY;
+      _cur_mode = LockMode::UNLOCK;
     }
     std::remove_if(_v_owners.begin(), _v_owners.end(), 
                    [&my_th_id](const std::thread::id& th_id){return (my_th_id == th_id);});
@@ -97,18 +97,10 @@ void rw_mutex::unlock(void) {
   return;
 }
 
-// TODO bool rw_mutex::try_lock(RwMode mode);
-
-std::string rw_mutex::disp_rw_mode(RwMode mode) {
-  if (mode == RwMode::EMPTY)
-    return std::string("EMPTY");
-  if (mode == RwMode::READ)
-    return std::string("READ");
-  return std::string("WRITE");
-}
+// TODO bool rw_mutex::try_lock(LockMode mode);
 
 std::ostream& operator<<(std::ostream& os, const rw_mutex& rwm) {
-  os << "cur_mode " << rw_mutex::disp_rw_mode(rwm._cur_mode)
+  os << "cur_mode " << rwm._cur_mode
      << ": num_readers " << rwm._num_readers;
   os << ": pending threads [ " << std::hex;
   for (auto &id : rwm._q_pending)

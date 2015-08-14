@@ -31,6 +31,7 @@
 // Local Headers
 #include "utils/basic/basictypes.h"
 #include "utils/basic/fassert.h"
+#include "utils/concur/lock.h"
 
 //! @addtogroup utils
 //! @{
@@ -43,7 +44,6 @@ namespace asarcar { namespace utils { namespace concur {
 //! behavior undefined if rw_lock is called recursively 
 class rw_mutex {
  public:
-  enum class RwMode : uint8_t {EMPTY=0, READ, WRITE};
   rw_mutex(void)                         = default;
   ~rw_mutex(void)                        = default;
   rw_mutex(const rw_mutex& o)            = delete;
@@ -51,11 +51,9 @@ class rw_mutex {
   rw_mutex(rw_mutex&& o)                 = delete; 
   rw_mutex& operator=(rw_mutex&& o)      = delete;
 
-  void lock(RwMode mode);
+  void lock(LockMode mode);
   void unlock(void);
-  // TODO: bool try_lock(RwMode mode);
-  static std::string disp_rw_mode(RwMode mode);
-
+  // TODO: bool try_lock(Lock::Mode mode);
   friend std::ostream& operator<<(std::ostream& os, const rw_mutex& rwm);
 
  private:
@@ -69,7 +67,7 @@ class rw_mutex {
   // vector exhibits better performance due to memory locality 
   // for small (<10K) number of elements
   std::vector<std::thread::id>  _v_owners{};
-  RwMode                        _cur_mode{RwMode::EMPTY};
+  LockMode                      _cur_mode{LockMode::UNLOCK};
   int                           _num_readers{0};
 };    
 

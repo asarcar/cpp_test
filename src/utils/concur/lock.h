@@ -13,18 +13,15 @@
 // limitations under the License.
 //
 
-#ifndef _UTILS_CONCUR_MONITOR_H_
-#define _UTILS_CONCUR_MONITOR_H_
+#ifndef _UTILS_CONCUR_LOCK_H_
+#define _UTILS_CONCUR_LOCK_H_
 
-//! @file   monitor.h
-//! @brief  Wrapper executes functions synchronously.
-//! @detail Ensures calls are thread safe by taking mutual exclusion lock.
-//!
+//! @file   lock.h
+//! @brief  Common Data Types used for Synchronization 
 //! @author Arijit Sarcar <sarcar_a@yahoo.com>
 
 // C++ Standard Headers
-#include <functional>           // std::function
-#include <mutex>                // std::lock_guard, std::lock_guard
+#include <array>
 // C Standard Headers
 // Google Headers
 // Local Headers
@@ -32,32 +29,33 @@
 //! @addtogroup utils
 //! @{
 
-//! Namespace used for all concurrency utility routines
 namespace asarcar { namespace utils { namespace concur {
 //-----------------------------------------------------------------------------
-template <typename T>
-class Monitor {
- private:
-  mutable T              _t;
-  mutable std::mutex     _m;
-
+class Lock {
  public:
-  explicit Monitor(T&& t): _t{std::move(t)} {}
-  ~Monitor() = default;
-  // Prevent bad usage: copy and assignment of Monitor
-  Monitor(const Monitor&)             = delete;
-  Monitor& operator =(const Monitor&) = delete;
-  Monitor(Monitor&&)             = delete;
-  Monitor& operator =(Monitor&&) = delete;
+  // Prevent bad usage: ctor
+  Lock() = delete;
 
-  template <typename F> 
-  auto operator()(F f) const -> decltype(f(_t)) { 
-    std::lock_guard<std::mutex> _{_m};
-    return f(_t);
+  enum class Mode : int {UNLOCK=0, SHARE_LOCK, EXCLUSIVE_LOCK};
+  static inline std::string to_string(Mode mode) {
+    return std::string(_toStr.at(static_cast<std::size_t>(mode)));
   }
+ private:
+  static constexpr 
+  std::array<const char *, 
+             static_cast<std::size_t>(Mode::EXCLUSIVE_LOCK)+1> _toStr 
+  {{"UNLOCK", "SHARE_LOCK", "EXCLUSIVE_LOCK"}};
 };
+
+using LockMode = Lock::Mode;
+
+inline std::ostream& operator<<(std::ostream& os, LockMode mode) {
+  os << Lock::to_string(mode);
+  return os;
+}
+
 
 //-----------------------------------------------------------------------------
 } } } // namespace asarcar { namespace utils { namespace concur {
 
-#endif // _UTILS_CONCUR_MONITOR_H_
+#endif // _UTILS_CONCUR_LOCK_H_

@@ -36,7 +36,9 @@ using namespace std;
 
 // Declarations
 DECLARE_bool(auto_test);
-DECLARE_int32(num_threads);
+DECLARE_bool(auto_test);
+DECLARE_int32(num_incs);
+
 
 constexpr int NUM_THS           = 32;
 // # of times we change value
@@ -45,9 +47,6 @@ constexpr int NUM_INCS          = 1024;
 constexpr int NUM_LOOP_DELTA    = 32;
 // change of value a random number in {-MAX_RANGE, +MAX_RANGE} range
 constexpr int MAX_RANGE         = 16;   
-
-DECLARE_bool(auto_test);
-DECLARE_int32(num_incs);
 
 class Counter {
  public:

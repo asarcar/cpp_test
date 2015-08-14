@@ -14,7 +14,7 @@
 
 # Author: Arijit Sarcar <sarcar_a@yahoo.com>
 
-add_library(concur_utils rw_mutex.cc)
+add_library(concur_utils lock.cc rw_mutex.cc spin_lock.cc)
 target_link_libraries(concur_utils basic_utils)
 
 ######################################
