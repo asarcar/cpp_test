@@ -49,7 +49,6 @@ class SpinLockTester {
   void LockBasicTest();
   void LockExclusiveTest();
   void LockSharedTest();
-  void LockBothTest();
   void LockUpgradeTest();
   void LockDowngradeTest();
   void LockBenchmarkTest();
@@ -188,7 +187,6 @@ int main(int argc, char *argv[]) {
   test.LockBasicTest();
   test.LockExclusiveTest();
   test.LockSharedTest();
-  test.LockBothTest();
   test.LockUpgradeTest();
   test.LockDowngradeTest();
   if (FLAGS_benchmark)

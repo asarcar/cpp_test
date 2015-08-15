@@ -27,6 +27,10 @@ namespace asarcar { namespace utils { namespace concur {
 //-----------------------------------------------------------------------------
 
 constexpr int SpinLock::MAX_SPIN_ITERATIONS;
+constexpr int SpinLock::UNLOCK_VAL;
+constexpr int SpinLock::EXCLUSIVE_LOCK_VAL;
+constexpr int SpinLock::SHARE_DELTA_LOCK_VAL;
+
 constexpr std::memory_order SpinLock::MEM_ORDER;
 
 // Weak but efficient attempt to acquire lock. 
@@ -40,13 +44,15 @@ bool SpinLock::TryLock(LockMode mode) {
   if (curval == EXCLUSIVE_LOCK_VAL)
     return false;
 
-  // SHARE_LOCK case: Increment current value of val_ 
+  // SHARE_LOCK case: Increment current value of val_ which is guaranteed >=0 
   if (mode == LockMode::SHARE_LOCK) 
-    return val_.compare_exchange_weak(curval, curval+1, MEM_ORDER);
+    return val_.compare_exchange_weak(curval, 
+                                      curval+SHARE_DELTA_LOCK_VAL,
+                                      MEM_ORDER);
 
   // EXCLUSIVE_LOCK case: honored when val_ has UNLOCK_VAL 
-  int newval = UNLOCK_VAL;
-  return val_.compare_exchange_weak(newval, EXCLUSIVE_LOCK_VAL, MEM_ORDER);
+  int expval = UNLOCK_VAL;
+  return val_.compare_exchange_weak(expval, EXCLUSIVE_LOCK_VAL, MEM_ORDER);
 }
 
 void SpinLock::lock(LockMode mode) {
@@ -75,8 +81,9 @@ void SpinLock::lock(LockMode mode) {
     }
 
     num += num_iter;
-
-    ++num_waiting_ths_; // same as fetch_add(1, MEM_ORDER);
+ 
+    // accounting stats: we can be relaxed about operation
+    num_waiting_ths_.fetch_add(1, memory_order_relaxed); 
 
     // SCENARIO: 
     // We couldn't acquire spin lock: someone is holding the lock
@@ -92,7 +99,8 @@ void SpinLock::lock(LockMode mode) {
     // of the atomic value to change. However, the primary reason 
     // for SpinLock is to busy wait and eliminate the context
     // switch. Hence we are not using that option here.
-    --num_waiting_ths_;  // same as fetch_sub(1, MEM_ORDER);
+    // accounting stats: we can be relaxed about operation
+    num_waiting_ths_.fetch_sub(1, memory_order_relaxed);
 
     DCHECK_GE(num_waiting_ths_.load(), 0);
   }
@@ -113,8 +121,21 @@ void SpinLock::unlock(void) {
   // are guaranteed that the LOCK is in SHARE_LOCK state (val_ > 0) at 
   // this juncture. Atomically decrement irrespective of what other threads
   // are doing.
-  --val_; // same as fetch_sub(1, MEM_ORDER);
+  val_.fetch_sub(SHARE_DELTA_LOCK_VAL, MEM_ORDER); 
 
+  return;
+}
+
+bool SpinLock::TryUpgrade(void) {
+  DCHECK_GE(val_.load(), SHARE_DELTA_LOCK_VAL);
+  int val = SHARE_DELTA_LOCK_VAL;
+  return val_.compare_exchange_weak(val, EXCLUSIVE_LOCK_VAL, MEM_ORDER);
+} 
+
+void SpinLock::Downgrade(void) {
+  DCHECK_EQ(val_.load(), EXCLUSIVE_LOCK_VAL);
+  int val = EXCLUSIVE_LOCK_VAL;
+  val_.compare_exchange_strong(val, SHARE_DELTA_LOCK_VAL, MEM_ORDER);
   return;
 }
 

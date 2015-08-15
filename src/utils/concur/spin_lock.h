@@ -55,11 +55,13 @@ class SpinLock {
   // max # times we spin iterate before yielding to other threads
   static constexpr int MAX_SPIN_ITERATIONS = 100; 
   // Lock State
-  // 1. UNLOCK          0
-  // 2. EXCLUSIVE_LOCK -1  (<0)
-  // 3. SHARED_LOCK    +X  with X objects owning shared lock
-  static constexpr int UNLOCK_VAL          = 0;
-  static constexpr int EXCLUSIVE_LOCK_VAL  = -1;
+  // 1. UNLOCK              0
+  // 2. EXCLUSIVE_LOCK     -1  (<0)
+  // 3. SHARE_LOCK         +X  with X objects owning shared lock
+  //    SHARE_INC_LOCK_VAL  1  inc with each new share lock member
+  static constexpr int UNLOCK_VAL            =  0;
+  static constexpr int EXCLUSIVE_LOCK_VAL    = -1;
+  static constexpr int SHARE_DELTA_LOCK_VAL  =  1;
   
   explicit SpinLock() {};
   ~SpinLock() = default;
@@ -74,13 +76,20 @@ class SpinLock {
 
   // Attempts to take the lock: return TRUE if successful, FALSE otherwise
   bool TryLock(LockMode mode = LockMode::EXCLUSIVE_LOCK);
+  // Attempts to upgrade the lock from Share to Exclusive.
+  // returns TRUE if successful, false otherwise
+  bool TryUpgrade(void);
+  // Attempts to downgrade the lock from Exclusive to Share
+  // returns TRUE if successful, false otherwise
+  void Downgrade(void);
   
   std::string to_string(void);
   friend std::ostream& operator<<(std::ostream& os, SpinLock& s);
 
  private:
-  // val_ represents lock state
-  std::atomic_int val_{0}; 
+  // lock state values: UNLOCK, EXCLUSIVE_LOCK, or SHARE_LOCK
+  std::atomic_int val_{0};
+
 
   // # times we spun before success for the last lock acquired
   int              num_spins_{0};     
