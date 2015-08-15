@@ -27,12 +27,12 @@
 #include "utils/basic/basictypes.h"
 #include "utils/basic/fassert.h"
 #include "utils/basic/init.h"
-#include "utils/concur/rw_lock_guard.h"
+#include "utils/concur/lock_guard.h"
+#include "utils/concur/rw_mutex.h"
 
 using namespace asarcar;
 using namespace asarcar::utils;
 using namespace asarcar::utils::concur;
-using namespace std;
 
 // Declarations
 DECLARE_bool(auto_test);
@@ -53,31 +53,31 @@ class ValTest {
 public:
   void op(LockMode mode, int inc) {
     uint32_t rnd_val = _wfn();
-    rw_lock_guard lck{_rwm, mode};
-    if (mode == LockMode::EXCLUSIVE_LOCK)
+    lock_guard<rw_mutex> lckg{_rwm, mode};
+    if (mode == LockMode::EXCLUSIVE_LOCK) {
       _v += inc;
+    } 
     std::this_thread::sleep_for(std::chrono::milliseconds(rnd_val));
-    LOG(INFO) << "TH " << hex << "0x" << this_thread::get_id() 
+    LOG(INFO) << "TH " << std::hex << "0x" << std::this_thread::get_id() 
               << ": OP=" << mode
-              << ": val=" << dec << _v 
+              << ": val=" << std::dec << _v 
               << ": after " << rnd_val << " millisecs";
     return;
   }
   void disp(void) {
-    LOG(INFO) << "TH: " << hex << "0x" << this_thread::get_id() 
-              << " val=" << dec <<  _v << endl;
-    CHECK_EQ(_v, 76) << "val=" << _v << " != 76 (expected_val): Error!" << endl;
+    LOG(INFO) << "TH: " << std::hex << "0x" << std::this_thread::get_id() 
+              << " val=" << std::dec <<  _v << std::endl;
+    CHECK_EQ(_v, 76) << "val=" << _v << " != 76 (expected_val): Error!" 
+                     << std::endl;
     return;
   }
  private:
   int      _v{0};
   rw_mutex _rwm{};
   using RdValFn=uint32_t(void);
-  std::function<uint32_t(void)> _wfn {
-    bind(uniform_int_distribution<uint32_t>
-         {1,MAX_NUM_WAIT},
-         default_random_engine{random_device{}()})
-        };
+  std::function<uint32_t(void)> 
+  _wfn { std::bind(std::uniform_int_distribution<uint32_t>{1,MAX_NUM_WAIT}, 
+                   std::default_random_engine{std::random_device{}()}) };
 };
 
 int main(int argc, char *argv[]) {
@@ -85,7 +85,7 @@ int main(int argc, char *argv[]) {
 
   ValTest val_test{};
 
-  vector<thread> th_pool;
+  std::vector<std::thread> th_pool;
 
   // every FLAGS_num_reads_per_write + 1 will have 1 write: rest are reads
   int num_rd_wr_quanta = FLAGS_num_reads_per_write + 1;
@@ -96,7 +96,7 @@ int main(int argc, char *argv[]) {
     if (((i + 1) % num_rd_wr_quanta) == 0)
       mode = LockMode::EXCLUSIVE_LOCK;
 
-    th_pool.push_back(thread([&val_test](LockMode mode, int inc) {
+    th_pool.push_back(std::thread([&val_test](LockMode mode, int inc) {
           val_test.op(mode, inc);
         }, mode, i));
   }   

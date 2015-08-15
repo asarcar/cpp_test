@@ -49,9 +49,18 @@ namespace asarcar { namespace utils { namespace concur {
 //-----------------------------------------------------------------------------
 class SpinLock {
  public:
+  // All Memory Order Operations on ATOMICs are kept SEQUENTIALY CONSISTENT 
+  // Otherwise it becomes very hard to reason
+  static constexpr std::memory_order MEM_ORDER = std::memory_order_seq_cst;
   // max # times we spin iterate before yielding to other threads
   static constexpr int MAX_SPIN_ITERATIONS = 100; 
-
+  // Lock State
+  // 1. UNLOCK          0
+  // 2. EXCLUSIVE_LOCK -1  (<0)
+  // 3. SHARED_LOCK    +X  with X objects owning shared lock
+  static constexpr int UNLOCK_VAL          = 0;
+  static constexpr int EXCLUSIVE_LOCK_VAL  = -1;
+  
   explicit SpinLock() {};
   ~SpinLock() = default;
   // Prevent bad usage: copy and assignment of SpinLock
@@ -60,37 +69,25 @@ class SpinLock {
   SpinLock(SpinLock&&)                  = delete;
   SpinLock& operator =(SpinLock&&)      = delete;
 
-  void lock(void);
-  inline void unlock(void) {
-    DCHECK_NE(mode_, LockMode::UNLOCK);
-    mode_ = LockMode::UNLOCK;
-    lck_.clear(std::memory_order_release); 
-  }
+  void lock(LockMode mode = LockMode::EXCLUSIVE_LOCK);
+  void unlock(void);
 
   // Attempts to take the lock: return TRUE if successful, FALSE otherwise
-  inline bool TryLock() {
-    return !lck_.test_and_set(std::memory_order_acquire);
-  }
-
+  bool TryLock(LockMode mode = LockMode::EXCLUSIVE_LOCK);
+  
   std::string to_string(void);
   friend std::ostream& operator<<(std::ostream& os, SpinLock& s);
 
  private:
-  std::atomic_flag lck_{ATOMIC_FLAG_INIT};
+  // val_ represents lock state
+  std::atomic_int val_{0}; 
 
-  // Currently: Only two SpinLock modes supported: UNLOCK or EXCLUSIVE_LOCK
-  // Since we assume spinlocks are taken for very short duration
-  // benefit of SHARED_LOCK is not seen since we assume minimal contention
-  LockMode         mode_{LockMode::UNLOCK}; 
   // # times we spun before success for the last lock acquired
   int              num_spins_{0};     
   // # threads waiting to acquire spinlock and busy waiting
-  std::atomic<int> num_waiting_ths_{0};
+  std::atomic_int  num_waiting_ths_{0};
 
-  inline void UpdateLockStats(int num) {
-    mode_      = LockMode::EXCLUSIVE_LOCK;
-    num_spins_ = num;
-  }
+  inline void UpdateLockStats(int num) { num_spins_ = num; }
 };
 
 std::ostream& operator<<(std::ostream& os, SpinLock& s);

@@ -28,12 +28,14 @@
 #include "utils/basic/basictypes.h"
 #include "utils/basic/fassert.h"
 #include "utils/basic/init.h"
+#include "utils/concur/lock_guard.h"
 #include "utils/concur/spin_lock.h"
 
 using namespace asarcar;
 using namespace asarcar::utils;
 using namespace asarcar::utils::concur;
 using namespace std;
+using namespace std::chrono;
 
 // Declarations
 DECLARE_bool(auto_test);
@@ -41,7 +43,7 @@ DECLARE_bool(benchmark);
 
 class SpinLockTester {
  public:
-  SpinLockTester(): sl_{} {}
+  SpinLockTester() {}
   ~SpinLockTester() = default;
 
   void LockBasicTest();
@@ -53,61 +55,117 @@ class SpinLockTester {
   void LockBenchmarkTest();
 
  private:
-  SpinLock sl_;
+  using UTime = microseconds;
+  using TimeP = time_point<system_clock>;
+  static constexpr const char* kUnitStr = "us";
+  static constexpr uint32_t kSleepDuration = 10000;
+
+  SpinLock   sl_;
+  struct LockFields {
+    SpinLock& sl;
+    TimeP     start;
+    UTime     duration;
+    bool      try_lock_status;
+    LockMode  parent_lock_mode;
+    LockMode  child_lock_mode;
+  };
+  void LockHelper(LockFields& lf);
 };
 
+constexpr const char* SpinLockTester::kUnitStr;
+constexpr uint32_t SpinLockTester::kSleepDuration;
+
+void 
+SpinLockTester::LockHelper(LockFields& lf) {
+  thread th;  
+  {
+    lock_guard<SpinLock> lckg(lf.sl, lf.parent_lock_mode);
+    th = thread(
+        [&lf]() {
+          lf.try_lock_status = lf.sl.TryLock(lf.child_lock_mode);
+          if (lf.try_lock_status)
+            lf.sl.unlock();
+          {
+            lock_guard<SpinLock> lckg(lf.sl, lf.child_lock_mode);
+            lf.duration = 
+                duration_cast<UTime>(system_clock::now() - lf.start);
+            LOG(INFO) << "Child Thread " << this_thread::get_id()
+                      << ": Parent Held Lock " 
+                      << Lock::to_string(lf.parent_lock_mode)
+                      << ": Child Trying Lock " 
+                      << Lock::to_string(lf.child_lock_mode)
+                      << ": TryLockStatus " << boolalpha << lf.try_lock_status
+                      << ": Lock Acquired " << lf.sl << " in "
+                      << lf.duration.count() << kUnitStr; 
+          }
+        });
+    // sleep for some time
+    this_thread::sleep_for(UTime(kSleepDuration)); 
+  }
+  th.join();
+
+  LOG(INFO) << "Parent Thread " << this_thread::get_id()
+            << ": Parent Held Lock " 
+            << Lock::to_string(lf.parent_lock_mode)
+            << ": Child Lock " 
+            << Lock::to_string(lf.child_lock_mode)
+            << ": TryLockStatus " << boolalpha << lf.try_lock_status
+            << ": Lock Acquired " << lf.sl << " in "
+            << lf.duration.count() << kUnitStr; 
+  return;
+}
+
+// 1. TryLock acquire succeeds on first attempt
+// 2. TryLock fails if lock already acquired
+void SpinLockTester::LockBasicTest() {
+  CHECK(sl_.TryLock());
+  sl_.unlock();
+  lock_guard<SpinLock> lckg(sl_, LockMode::EXCLUSIVE_LOCK); 
+  CHECK(!sl_.TryLock());
+
+  return;
+}
 
 // Main thread holds the lock for 10ms. 
 // Child Thread tries to hold the lock.
 // Verify it does not succeed until main thread
 // relinquishes the lock.
-void SpinLockTester::LockBasicTest() {
-  using UTime = chrono::microseconds;
-  constexpr const char* unit = "us";
-  constexpr uint32_t kSleepDuration = 10000;
-  chrono::time_point<chrono::system_clock> 
-      lock_start = chrono::system_clock::now();
-  chrono::time_point<chrono::system_clock> 
-      lock_acquire{lock_start};
-
-
-  sl_.lock();
-  thread th = thread(
-      [this, &lock_start, &lock_acquire]() {
-        CHECK(!sl_.TryLock());
-        lock_acquire = chrono::system_clock::now();
-        UTime duration = 
-        chrono::duration_cast<UTime>(lock_acquire - lock_start);
-        
-        LOG(INFO) << "Child Thread: could not acquire SpinLock: sl " 
-        << sl_ << ": even after " << duration.count() << unit; 
-        sl_.lock();
-        lock_acquire = chrono::system_clock::now();
-        sl_.unlock();
-      });
-  // sleep for some time
-  this_thread::sleep_for(UTime(kSleepDuration)); 
-  sl_.unlock();
-
-  th.join();
-  chrono::nanoseconds duration = 
-      chrono::duration_cast<chrono::nanoseconds>(lock_acquire - lock_start);
-  CHECK_GT(duration.count(), kSleepDuration);
-  LOG(INFO) << "Child Thread: acquired SpinLock: sl " << sl_ << " in "
-            << duration.count() << unit; 
-
-  return;
-}
-
 void SpinLockTester::LockExclusiveTest() {
+  LockFields lf = {sl_, system_clock::now(), {}, false, 
+                   LockMode::EXCLUSIVE_LOCK, LockMode::EXCLUSIVE_LOCK};
+  LockHelper(lf);
+  CHECK(!lf.try_lock_status);
+  CHECK_GT(lf.duration.count(), kSleepDuration);
   return;
 }
 
+// 1. Parent holds shared lock. Child allowed Shared lock.
+// 2. Parent holds shared Lock. Child disallowed Exclusive 
+//    Lock until parent relinquishes shared lock.
+// 3. Parent holds exclusive Lock. Child disallowed shared
+//    Lock until parent relinquishes exclusive lock.
 void SpinLockTester::LockSharedTest() {
-  return;
-}
-
-void SpinLockTester::LockBothTest() {
+  {
+    LockFields lf = {sl_, system_clock::now(), {}, false, 
+                     LockMode::SHARE_LOCK, LockMode::SHARE_LOCK};
+    LockHelper(lf);
+    CHECK(lf.try_lock_status);
+    CHECK_LT(lf.duration.count(), kSleepDuration);
+  }
+  {
+    LockFields lf = {sl_, system_clock::now(), {}, false, 
+                     LockMode::SHARE_LOCK, LockMode::EXCLUSIVE_LOCK};
+    LockHelper(lf);
+    CHECK(!lf.try_lock_status);
+    CHECK_GT(lf.duration.count(), kSleepDuration);
+  }
+  {
+    LockFields lf = {sl_, system_clock::now(), {}, false, 
+                     LockMode::EXCLUSIVE_LOCK, LockMode::SHARE_LOCK};
+    LockHelper(lf);
+    CHECK(!lf.try_lock_status);
+    CHECK_GT(lf.duration.count(), kSleepDuration);
+  }
   return;
 }
 

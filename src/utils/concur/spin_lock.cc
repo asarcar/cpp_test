@@ -27,11 +27,32 @@ namespace asarcar { namespace utils { namespace concur {
 //-----------------------------------------------------------------------------
 
 constexpr int SpinLock::MAX_SPIN_ITERATIONS;
+constexpr std::memory_order SpinLock::MEM_ORDER;
 
-void SpinLock::lock(void) {
+// Weak but efficient attempt to acquire lock. 
+// Typically Succeeds when there is no contention on lock
+// and the lock is readily available.
+bool SpinLock::TryLock(LockMode mode) {
+  DCHECK_NE(mode, LockMode::UNLOCK);
+
+  // Currently: LOCK EXCLUSIVELY acquired by someone else: fail immediately
+  int curval = val_.load();
+  if (curval == EXCLUSIVE_LOCK_VAL)
+    return false;
+
+  // SHARE_LOCK case: Increment current value of val_ 
+  if (mode == LockMode::SHARE_LOCK) 
+    return val_.compare_exchange_weak(curval, curval+1, MEM_ORDER);
+
+  // EXCLUSIVE_LOCK case: honored when val_ has UNLOCK_VAL 
+  int newval = UNLOCK_VAL;
+  return val_.compare_exchange_weak(newval, EXCLUSIVE_LOCK_VAL, MEM_ORDER);
+}
+
+void SpinLock::lock(LockMode mode) {
   int num_iter, num = 0;
 
-  if (TryLock()) {
+  if (TryLock(mode)) {
     UpdateLockStats(1);
     return;
   }
@@ -47,7 +68,7 @@ void SpinLock::lock(void) {
       __asm volatile ("pause" ::: "memory");
 
       // lock aquired? update counter stats and return
-      if (TryLock()) {
+      if (TryLock(mode)) {
         UpdateLockStats(num + num_iter + 1);
         return;
       }
@@ -55,7 +76,7 @@ void SpinLock::lock(void) {
 
     num += num_iter;
 
-    num_waiting_ths_.fetch_add(1);
+    ++num_waiting_ths_; // same as fetch_add(1, MEM_ORDER);
 
     // SCENARIO: 
     // We couldn't acquire spin lock: someone is holding the lock
@@ -71,15 +92,39 @@ void SpinLock::lock(void) {
     // of the atomic value to change. However, the primary reason 
     // for SpinLock is to busy wait and eliminate the context
     // switch. Hence we are not using that option here.
-    num_waiting_ths_.fetch_sub(1);
+    --num_waiting_ths_;  // same as fetch_sub(1, MEM_ORDER);
 
     DCHECK_GE(num_waiting_ths_.load(), 0);
   }
   return;
 }
 
+void SpinLock::unlock(void) {
+  // Exclusive lock case:
+  int exc_lck_val = EXCLUSIVE_LOCK_VAL; // expected value if we owned an EXCLUSIVE_LOCK
+  if (val_.compare_exchange_strong(exc_lck_val, 0, MEM_ORDER))
+    return;
+  
+
+  // Shared lock case:
+  DCHECK_GT(exc_lck_val, 0);
+
+  // Assuming unlock state is not unpaired due to SW bug we 
+  // are guaranteed that the LOCK is in SHARE_LOCK state (val_ > 0) at 
+  // this juncture. Atomically decrement irrespective of what other threads
+  // are doing.
+  --val_; // same as fetch_sub(1, MEM_ORDER);
+
+  return;
+}
+
 string SpinLock::to_string(void) {
-  return string("SpinLock: Mode ") + Lock::to_string(mode_) + 
+  int val = val_.load();
+  return string("SpinLock: Value ") + std::to_string(val_.load())
+      + string(": LockMode ") + 
+      Lock::to_string((val == 0) ? LockMode::UNLOCK : 
+                      ((val > 0) ? LockMode::SHARE_LOCK : 
+                       LockMode::EXCLUSIVE_LOCK)) +
       string(": num_spins ") + std::to_string(num_spins_) + 
       string(": num_waiting_ths ") + std::to_string(num_waiting_ths_.load());
 }

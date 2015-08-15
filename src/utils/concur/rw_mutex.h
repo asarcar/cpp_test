@@ -51,7 +51,7 @@ class rw_mutex {
   rw_mutex(rw_mutex&& o)                 = delete; 
   rw_mutex& operator=(rw_mutex&& o)      = delete;
 
-  void lock(LockMode mode);
+  void lock(LockMode mode = LockMode::EXCLUSIVE_LOCK);
   void unlock(void);
   // TODO: bool try_lock(Lock::Mode mode);
   friend std::ostream& operator<<(std::ostream& os, const rw_mutex& rwm);
