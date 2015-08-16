@@ -56,34 +56,19 @@ bool SpinLock::TryLock(LockMode mode) {
 }
 
 void SpinLock::lock(LockMode mode) {
-  int num_iter, num = 0;
+  int num_iter;
 
-  if (TryLock(mode)) {
-    UpdateLockStats(1);
-    return;
-  }
+  for (num_iter=0; !TryLock(mode); ++num_iter) {
+    // For busy waiting: Use 'pause' instruction to prevent speculative 
+    // execution.
+    // Reason: When we finally acquire the lock, we take the mother of all 
+    // mispredicted branches leaving the while loop, which is the worst 
+    // possible time for such a thing as you want duration one is holding
+    // spinlocks to be very short. So post spin lock delays are deadly
+    __asm volatile ("pause" ::: "memory");
 
-  while (true) {
-    for (num_iter=0; num_iter < MAX_SPIN_ITERATIONS; ++num_iter) {
-      // For busy waiting: Use 'pause' instruction to prevent speculative 
-      // execution.
-      // Reason: When we finally acquire the lock, we take the mother of all 
-      // mispredicted branches leaving the while loop, which is the worst 
-      // possible time for such a thing as you want duration one is holding
-      // spinlocks to be very short. So post spin lock delays are deadly
-      __asm volatile ("pause" ::: "memory");
-
-      // lock aquired? update counter stats and return
-      if (TryLock(mode)) {
-        UpdateLockStats(num + num_iter + 1);
-        return;
-      }
-    }
-
-    num += num_iter;
- 
-    // accounting stats: we can be relaxed about operation
-    num_waiting_ths_.fetch_add(1, memory_order_relaxed); 
+    // debug accounting stats: we can be relaxed about operation
+    DCHECK_GE(num_waiting_ths_.fetch_add(1, memory_order_relaxed), 0); 
 
     // SCENARIO: 
     // We couldn't acquire spin lock: someone is holding the lock
@@ -99,11 +84,14 @@ void SpinLock::lock(LockMode mode) {
     // of the atomic value to change. However, the primary reason 
     // for SpinLock is to busy wait and eliminate the context
     // switch. Hence we are not using that option here.
-    // accounting stats: we can be relaxed about operation
-    num_waiting_ths_.fetch_sub(1, memory_order_relaxed);
 
-    DCHECK_GE(num_waiting_ths_.load(), 0);
+    // debug accounting stats: we can be relaxed about operation
+    DCHECK_GE(num_waiting_ths_.fetch_sub(1, memory_order_relaxed), 1);
   }
+
+  // lock aquired - update counter stats and return
+  UpdateLockStats(num_iter + 1);
+
   return;
 }
 
@@ -147,11 +135,12 @@ void SpinLock::Downgrade(void) {
 }
 
 string SpinLock::to_string(void) {
-  return string("SpinLock: Value ") + std::to_string(val_.load())
-      + string(": LockMode ") + 
+  return string("SpinLock: Value ") + std::to_string(val_.load()) +
+      string(": LockMode ") + 
       Lock::to_string(Mode()) +
-      string(": num_spins ") + std::to_string(num_spins_.load()) + 
-      string(": num_waiting_ths ") + std::to_string(num_waiting_ths_.load());
+      string(": Debug Stats {num_spins ") + std::to_string(num_spins_.load()) + 
+      string(": num_waiting_ths ") + std::to_string(num_waiting_ths_.load()) + 
+      string("}");
 }
 
 ostream& operator<<(ostream& os, SpinLock& s) {

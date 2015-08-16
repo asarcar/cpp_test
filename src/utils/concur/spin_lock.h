@@ -92,12 +92,17 @@ class SpinLock {
   std::atomic_int val_{0};
 
 
-  // # times we spun before success for the last lock acquired
+  // debug stats: # times we spun before success for the last lock acquired
   std::atomic_int  num_spins_{0};     
-  // # threads waiting to acquire spinlock and busy waiting
+  // debug stats: # threads waiting to acquire spinlock and busy waiting
   std::atomic_int  num_waiting_ths_{0};
 
-  inline void UpdateLockStats(int num) { num_spins_.store(num); }
+  inline void UpdateLockStats(int num) { 
+    // Comman separated expression returns the value of the last expression:
+    // (a, b) returns b. We used this method to ensure num_spins_ (debug stats)
+    // is only updated when NDEBUG is turned on.
+    DCHECK_GT((num_spins_.store(num), num), 0); 
+  }
 };
 
 std::ostream& operator<<(std::ostream& os, SpinLock& s);
