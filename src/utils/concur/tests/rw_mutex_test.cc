@@ -25,6 +25,7 @@
 #include <glog/logging.h>   
 // Local Headers
 #include "utils/basic/basictypes.h"
+#include "utils/basic/clock.h"
 #include "utils/basic/fassert.h"
 #include "utils/basic/init.h"
 #include "utils/concur/lock_guard.h"
@@ -57,7 +58,7 @@ public:
     if (mode == LockMode::EXCLUSIVE_LOCK) {
       _v += inc;
     } 
-    std::this_thread::sleep_for(std::chrono::milliseconds(rnd_val));
+    std::this_thread::sleep_for(Clock::TimeMSecs(rnd_val));
     LOG(INFO) << "TH " << std::hex << "0x" << std::this_thread::get_id() 
               << ": OP=" << mode
               << ": val=" << std::dec << _v 

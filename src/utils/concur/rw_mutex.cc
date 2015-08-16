@@ -70,8 +70,6 @@ void rw_mutex::lock(LockMode mode) {
     this->_cur_mode = LockMode::SHARE_LOCK;
   }
 
-  LOG(INFO) << "rw_lock state =>" << *this << "<=" << std::endl;
-
   return; 
 }
 

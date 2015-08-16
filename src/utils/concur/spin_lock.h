@@ -93,11 +93,11 @@ class SpinLock {
 
 
   // # times we spun before success for the last lock acquired
-  int              num_spins_{0};     
+  std::atomic_int  num_spins_{0};     
   // # threads waiting to acquire spinlock and busy waiting
   std::atomic_int  num_waiting_ths_{0};
 
-  inline void UpdateLockStats(int num) { num_spins_ = num; }
+  inline void UpdateLockStats(int num) { num_spins_.store(num); }
 };
 
 std::ostream& operator<<(std::ostream& os, SpinLock& s);

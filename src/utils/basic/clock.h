@@ -34,17 +34,25 @@ namespace asarcar {
 
 class Clock {
  public:
-  using Time=uint64_t;
-  static inline Time Secs(void) {
-    return std::chrono::duration_cast<std::chrono::seconds>
+  using TimePoint    = uint64_t;
+  using TimeDuration = TimePoint;
+  using TimeUSecs    = std::chrono::microseconds;
+  using TimeMSecs    = std::chrono::milliseconds;
+  using TimeSecs     = std::chrono::seconds;
+  Clock() = delete; // class is never created
+  static inline TimePoint USecs(void) {
+    return std::chrono::duration_cast<TimeUSecs>
         (std::chrono::system_clock::now().time_since_epoch()).count();
   }
-  static inline Time USecs(void) {
-    return std::chrono::duration_cast<std::chrono::microseconds>
+  static inline TimePoint MSecs(void) {
+    return std::chrono::duration_cast<TimeMSecs>
+        (std::chrono::system_clock::now().time_since_epoch()).count();
+  }
+  static inline TimePoint Secs(void) {
+    return std::chrono::duration_cast<TimeSecs>
         (std::chrono::system_clock::now().time_since_epoch()).count();
   }
  private:
-  Clock() = delete; // class is never created
 };
 //-----------------------------------------------------------------------------
 } // namespace asarcar

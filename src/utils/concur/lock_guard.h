@@ -42,9 +42,13 @@ template<typename Mutex>
 class lock_guard
 {
  public:
+  explicit lock_guard(Mutex& m) : 
+      mutex_(m) { 
+    mutex_.lock();
+  }
   explicit lock_guard(Mutex& m, LockMode mode) : 
-      mutex_(m), mode_{mode} { 
-    mutex_.lock(mode_); 
+      mutex_(m) { 
+    mutex_.lock(mode); 
   }
   ~lock_guard(void) {mutex_.unlock();}
   lock_guard(const lock_guard& o)             = delete;
@@ -54,7 +58,6 @@ class lock_guard
 
  private:
   Mutex&              mutex_;
-  LockMode            mode_;
 };
 
 //-----------------------------------------------------------------------------

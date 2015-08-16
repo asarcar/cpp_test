@@ -52,7 +52,7 @@ int MakeUniqueTester::Count=0;
 int main(int argc, char **argv) {
   Init::InitEnv(&argc, &argv);
 
-  Clock::Time now = Clock::USecs();
+  Clock::TimePoint now = Clock::USecs();
   LOG(INFO) << argv[0] << " Executing Test";
   MakeUniqueTester mut;
   mut.Run();

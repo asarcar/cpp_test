@@ -150,7 +150,7 @@ string SpinLock::to_string(void) {
   return string("SpinLock: Value ") + std::to_string(val_.load())
       + string(": LockMode ") + 
       Lock::to_string(Mode()) +
-      string(": num_spins ") + std::to_string(num_spins_) + 
+      string(": num_spins ") + std::to_string(num_spins_.load()) + 
       string(": num_waiting_ths ") + std::to_string(num_waiting_ths_.load());
 }
 
