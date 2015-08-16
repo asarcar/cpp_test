@@ -65,10 +65,9 @@ class SpinLockTester {
     TimeP     start;
     UTime     duration;
     bool      try_lock_status;
-    LockMode  parent_lock_mode;
     LockMode  child_lock_mode;
   };
-  void LockHelper(LockFields& lf);
+  static void LockHelper(LockFields& lf);
 };
 
 constexpr const char* SpinLockTester::kUnitStr;
@@ -76,52 +75,43 @@ constexpr uint32_t SpinLockTester::kSleepDuration;
 
 void 
 SpinLockTester::LockHelper(LockFields& lf) {
-  thread th;  
-  {
-    lock_guard<SpinLock> lckg(lf.sl, lf.parent_lock_mode);
-    th = thread(
-        [&lf]() {
-          lf.try_lock_status = lf.sl.TryLock(lf.child_lock_mode);
-          if (lf.try_lock_status)
-            lf.sl.unlock();
-          {
-            lock_guard<SpinLock> lckg(lf.sl, lf.child_lock_mode);
-            lf.duration = 
-                duration_cast<UTime>(system_clock::now() - lf.start);
-            LOG(INFO) << "Child Thread " << this_thread::get_id()
-                      << ": Parent Held Lock " 
-                      << Lock::to_string(lf.parent_lock_mode)
-                      << ": Child Trying Lock " 
-                      << Lock::to_string(lf.child_lock_mode)
-                      << ": TryLockStatus " << boolalpha << lf.try_lock_status
-                      << ": Lock Acquired " << lf.sl << " in "
-                      << lf.duration.count() << kUnitStr; 
-          }
-        });
-    // sleep for some time
-    this_thread::sleep_for(UTime(kSleepDuration)); 
-  }
-  th.join();
-
-  LOG(INFO) << "Parent Thread " << this_thread::get_id()
+  LOG(INFO) << "Child Thread " << this_thread::get_id()
             << ": Parent Held Lock " 
-            << Lock::to_string(lf.parent_lock_mode)
-            << ": Child Lock " 
-            << Lock::to_string(lf.child_lock_mode)
-            << ": TryLockStatus " << boolalpha << lf.try_lock_status
-            << ": Lock Acquired " << lf.sl << " in "
-            << lf.duration.count() << kUnitStr; 
+            << Lock::to_string(lf.sl.Mode())
+            << ": Child Trying Lock " 
+            << Lock::to_string(lf.child_lock_mode);
+
+  lf.try_lock_status = lf.sl.TryLock(lf.child_lock_mode);
+  if (lf.try_lock_status)
+    lf.sl.unlock();
+  {
+    lock_guard<SpinLock> lckg(lf.sl, lf.child_lock_mode);
+    lf.duration = 
+        duration_cast<UTime>(system_clock::now() - lf.start);
+    LOG(INFO) << "Child Thread " << this_thread::get_id()
+              << ": TryLockStatus " << boolalpha << lf.try_lock_status
+              << ": Lock Acquired " << lf.sl << " in "
+              << lf.duration.count() << kUnitStr; 
+  }
   return;
 }
 
 // 1. TryLock acquire succeeds on first attempt
 // 2. TryLock fails if lock already acquired
 void SpinLockTester::LockBasicTest() {
-  CHECK(sl_.TryLock());
-  sl_.unlock();
-  lock_guard<SpinLock> lckg(sl_, LockMode::EXCLUSIVE_LOCK); 
-  CHECK(!sl_.TryLock());
-
+  {
+    CHECK(sl_.TryLock());
+    CHECK_EQ(sl_.Mode(), LockMode::EXCLUSIVE_LOCK);
+    sl_.unlock();
+    CHECK_EQ(sl_.Mode(), LockMode::UNLOCK);
+  }
+  {
+    lock_guard<SpinLock> lckg(sl_, LockMode::EXCLUSIVE_LOCK); 
+    CHECK(!sl_.TryLock());
+    CHECK_EQ(sl_.Mode(), LockMode::EXCLUSIVE_LOCK);
+  }
+  CHECK_EQ(sl_.Mode(), LockMode::UNLOCK);
+  
   return;
 }
 
@@ -130,9 +120,17 @@ void SpinLockTester::LockBasicTest() {
 // Verify it does not succeed until main thread
 // relinquishes the lock.
 void SpinLockTester::LockExclusiveTest() {
+  thread th;
   LockFields lf = {sl_, system_clock::now(), {}, false, 
-                   LockMode::EXCLUSIVE_LOCK, LockMode::EXCLUSIVE_LOCK};
-  LockHelper(lf);
+                   LockMode::EXCLUSIVE_LOCK};
+  {
+    lock_guard<SpinLock> lckg(sl_, LockMode::EXCLUSIVE_LOCK);
+    th = thread(SpinLockTester::LockHelper, std::ref(lf));
+    // sleep for some time
+    this_thread::sleep_for(UTime(kSleepDuration)); 
+  }
+  th.join();
+
   CHECK(!lf.try_lock_status);
   CHECK_GT(lf.duration.count(), kSleepDuration);
   return;
@@ -144,31 +142,94 @@ void SpinLockTester::LockExclusiveTest() {
 // 3. Parent holds exclusive Lock. Child disallowed shared
 //    Lock until parent relinquishes exclusive lock.
 void SpinLockTester::LockSharedTest() {
+  thread th;
   {
     LockFields lf = {sl_, system_clock::now(), {}, false, 
-                     LockMode::SHARE_LOCK, LockMode::SHARE_LOCK};
-    LockHelper(lf);
-    CHECK(lf.try_lock_status);
-    CHECK_LT(lf.duration.count(), kSleepDuration);
+                     LockMode::SHARE_LOCK};
+    {
+      lock_guard<SpinLock> lckg(sl_, LockMode::SHARE_LOCK);
+      th = thread(SpinLockTester::LockHelper, std::ref(lf));
+      // sleep for some time
+      this_thread::sleep_for(UTime(kSleepDuration)); 
+      CHECK(lf.try_lock_status);
+      CHECK_LT(lf.duration.count(), kSleepDuration);
+    }
+    th.join(); 
   }
   {
     LockFields lf = {sl_, system_clock::now(), {}, false, 
-                     LockMode::SHARE_LOCK, LockMode::EXCLUSIVE_LOCK};
-    LockHelper(lf);
+                     LockMode::EXCLUSIVE_LOCK};
+    {
+      lock_guard<SpinLock> lckg(sl_, LockMode::SHARE_LOCK);
+      th = thread(SpinLockTester::LockHelper, std::ref(lf));
+      // sleep for some time
+      this_thread::sleep_for(UTime(kSleepDuration)); 
+    }
+    th.join();
+
     CHECK(!lf.try_lock_status);
     CHECK_GT(lf.duration.count(), kSleepDuration);
   }
   {
     LockFields lf = {sl_, system_clock::now(), {}, false, 
-                     LockMode::EXCLUSIVE_LOCK, LockMode::SHARE_LOCK};
-    LockHelper(lf);
+                     LockMode::SHARE_LOCK};
+    {
+      lock_guard<SpinLock> lckg(sl_, LockMode::EXCLUSIVE_LOCK);
+      th = thread(SpinLockTester::LockHelper, std::ref(lf));
+      // sleep for some time
+      this_thread::sleep_for(UTime(kSleepDuration)); 
+    }
+    th.join();
+
     CHECK(!lf.try_lock_status);
     CHECK_GT(lf.duration.count(), kSleepDuration);
   }
   return;
 }
 
+// 1. Take SHARED_LOCK. TryLock EXCLUSIVE_LOCK fails. 
+//    UpgradeLock succeeds. Subsequent TryUpgrade fails.
+// 2. Take SHARED LOCK twice. TryUpgrade fails.
+//    Unlock SHARED LOCK one. TryUpgrade succeeds.
+// 3. Parent takes SHARED LOCK. CHILD thread Lock succeeds. 
+//    Parent upgrades lock. Next Child thread lock acquire 
+//    fails until parent releases lock
 void SpinLockTester::LockUpgradeTest() {
+  {
+    lock_guard<SpinLock> lckg(sl_, LockMode::SHARE_LOCK);
+    CHECK_EQ(sl_.Mode(), LockMode::SHARE_LOCK);
+    CHECK(!sl_.TryLock(LockMode::EXCLUSIVE_LOCK));
+    CHECK(sl_.TryUpgrade());
+    CHECK_EQ(sl_.Mode(), LockMode::EXCLUSIVE_LOCK);
+  }
+  {
+    lock_guard<SpinLock> lckg(sl_, LockMode::SHARE_LOCK);
+    {
+      lock_guard<SpinLock> lckg(sl_, LockMode::SHARE_LOCK);
+      CHECK(!sl_.TryUpgrade());
+    }
+    CHECK(sl_.TryUpgrade());
+  }
+
+  thread th;
+  {
+    LockFields lf = {sl_, system_clock::now(), {}, false, 
+                     LockMode::SHARE_LOCK};
+    {
+      lock_guard<SpinLock> lckg(sl_, LockMode::SHARE_LOCK);
+      CHECK_EQ(sl_.Mode(), LockMode::SHARE_LOCK);
+      CHECK(sl_.TryUpgrade());
+      CHECK_EQ(sl_.Mode(), LockMode::EXCLUSIVE_LOCK);
+      th = thread(SpinLockTester::LockHelper, std::ref(lf));
+      // sleep for some time
+      this_thread::sleep_for(UTime(kSleepDuration)); 
+    }
+    th.join();
+
+    CHECK(!lf.try_lock_status);
+    CHECK_GT(lf.duration.count(), kSleepDuration);
+  }
+
   return;
 }
 

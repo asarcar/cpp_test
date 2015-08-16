@@ -73,6 +73,7 @@ class SpinLock {
 
   void lock(LockMode mode = LockMode::EXCLUSIVE_LOCK);
   void unlock(void);
+  LockMode Mode(void); // snapshot of the current mode of the lock
 
   // Attempts to take the lock: return TRUE if successful, FALSE otherwise
   bool TryLock(LockMode mode = LockMode::EXCLUSIVE_LOCK);

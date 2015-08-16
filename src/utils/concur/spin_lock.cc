@@ -126,6 +126,13 @@ void SpinLock::unlock(void) {
   return;
 }
 
+LockMode SpinLock::Mode(void) {
+  int val = val_.load();
+  return ((val == 0) ? LockMode::UNLOCK : 
+          ((val > 0) ? LockMode::SHARE_LOCK : 
+           LockMode::EXCLUSIVE_LOCK));
+}
+
 bool SpinLock::TryUpgrade(void) {
   DCHECK_GE(val_.load(), SHARE_DELTA_LOCK_VAL);
   int val = SHARE_DELTA_LOCK_VAL;
@@ -140,12 +147,9 @@ void SpinLock::Downgrade(void) {
 }
 
 string SpinLock::to_string(void) {
-  int val = val_.load();
   return string("SpinLock: Value ") + std::to_string(val_.load())
       + string(": LockMode ") + 
-      Lock::to_string((val == 0) ? LockMode::UNLOCK : 
-                      ((val > 0) ? LockMode::SHARE_LOCK : 
-                       LockMode::EXCLUSIVE_LOCK)) +
+      Lock::to_string(Mode()) +
       string(": num_spins ") + std::to_string(num_spins_) + 
       string(": num_waiting_ths ") + std::to_string(num_waiting_ths_.load());
 }
