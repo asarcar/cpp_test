@@ -33,7 +33,9 @@ using namespace std;
 
 namespace asarcar { 
 
-ProcInfo::ProcInfo() : num_cores_{0}, flags_{} {
+ProcInfo::ProcInfo() : num_cores_{0}, flags_{}, cache_line_size_{0} {
+
+  // Proc Info
   ifstream inp;
   string line;
 
@@ -61,8 +63,20 @@ ProcInfo::ProcInfo() : num_cores_{0}, flags_{} {
       line.erase(0, pos+1);
     }
   }
+
+  // Cache Line Size
+  std::ifstream sysfile;
+  sysfile.open("/sys/devices/system/cpu/cpu0/cache/index0/coherency_line_size", 
+               std::ios::in);
+  
+  FASSERT(sysfile);
+  
+  sysfile >> cache_line_size_;
+  sysfile.close();
+  FASSERT(cache_line_size_ == CACHE_LINE_SIZE);
+
   return;
-} 
+}
 
 } // namespace asarcar
 

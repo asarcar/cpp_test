@@ -35,6 +35,8 @@
 namespace asarcar {
 //-----------------------------------------------------------------------------
 
+#define CACHE_LINE_SIZE 64
+
 //! @class    ProcInfo
 //! @brief    Provide processor related information of the machine
 class ProcInfo {
@@ -46,10 +48,13 @@ class ProcInfo {
   }
   inline int NumCores(void) const { return num_cores_; }
   inline const std::unordered_set<std::string>& Flags(void) const { return flags_; }
+  size_t CacheLineSize(void) const { return cache_line_size_; }
+
  private:
   ProcInfo(); 
   int num_cores_;
   std::unordered_set<std::string> flags_;
+  size_t cache_line_size_;
 };
 //-----------------------------------------------------------------------------
 } // namespace asarcar

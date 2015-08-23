@@ -40,6 +40,7 @@ class ProcInfoTester {
       flags += string(" ") + entry;
     }
     LOG(INFO) << "Cores=" << proc_info_->NumCores() << ": " << flags;
+    CHECK_EQ(proc_info_->CacheLineSize(), CACHE_LINE_SIZE);
   }
  private:
   ProcInfo *proc_info_;
