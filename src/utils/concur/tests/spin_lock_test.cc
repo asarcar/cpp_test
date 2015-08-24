@@ -313,14 +313,16 @@ void SpinLockTester::LockBenchmarkTest() {
   Clock::TimeDuration durS = 
       LockBenchmarkExclusiveHelper(sl_);
   LOG(INFO) << "Time: " << kNumLockUnlock << " lock/unlock pairs "
-            << "for Mutex vs SpinLock = " << durM << "/" << durS 
-            << kUnitStr << ": difference = " << (durM - durS);
+            << "for Mutex/SpinLock = " << durM << "/" << durS 
+            << kUnitStr << ": SpeedUp = " 
+            << static_cast<double>(durM)/static_cast<double>(durS);
 
   durM = LockBenchmarkShareHelper(rwm_);
   durS = LockBenchmarkShareHelper(sl_);
   LOG(INFO) << "Time: " << kNumLockUnlock << " lock/unlock pairs "
-            << "for RW_Mutex vs SpinLock = " <<  durM << "/" << durS 
-            << kUnitStr << ": difference = " << (durM - durS);
+            << "for RW_Mutex/SpinLock = " <<  durM << "/" << durS 
+            << kUnitStr << ": SpeedUp = " 
+            << static_cast<double>(durM)/static_cast<double>(durS);
   
   return;
 }
