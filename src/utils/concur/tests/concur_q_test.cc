@@ -15,8 +15,10 @@
 // Author: Arijit Sarcar <sarcar_a@yahoo.com>
 
 // Standard C++ Headers
+#include <atomic>           // std::atomic_int
 #include <iostream>         // std::cout
 #include <mutex>            // std::mutex
+#include <thread>           // std::thread
 // Standard C Headers
 // Google Headers
 #include <glog/logging.h>   
@@ -73,7 +75,7 @@ class ConcurQMutex {
       lock_guard<std::mutex> lg{lck_};
       Node* new_head = head_->next_;
       if (new_head == nullptr)
-        return new_head;
+        return val;
       prev_head = head_;
       head_ = new_head;
       val.swap(head_->val_); // val.reset(sentinel_->val_.release())
@@ -88,20 +90,32 @@ class ConcurQMutex {
   Node*             tail_;
 };
 
-constexpr static size_t ElemSize1 = 32;
+constexpr static size_t ElemSize1 = 4;
 constexpr static size_t ElemSize2 = 1024;
 
 template <size_t ElemSize>
 class ConcurQTester {
  public:
-  struct Elem {
-    std::array<char, ElemSize> v;
+  class Elem {
+   public:
+    static_assert(ElemSize >= 4, "Minimum object size is 4 bytes");
+    Elem(int num=0) : 
+        v{static_cast<uint8_t>(num & 0xff), 
+          static_cast<uint8_t>((num >> 8) & 0xff), 
+          static_cast<uint8_t>((num >> 16) & 0xff), 
+          static_cast<uint8_t>((num >> 24) & 0xff)} {}
+    operator int() {
+      return (v.at(0) | v.at(1) << 8 | v.at(2) << 16 | v.at(3) << 24); 
+    }
+   private:
+    std::array<uint8_t, ElemSize> v;
   };
   using ElemPtr = std::unique_ptr<Elem>;
 
   ConcurQTester()  = default;
   ~ConcurQTester() = default;
 
+  void SanityTest();
   void BasicTest();
   void ProduceStressTest();
   void ConsumeStressTest();
@@ -132,27 +146,100 @@ constexpr uint32_t    ConcurQTester<ElemSize>::kNumProduceConsume;
 //    Pop returns same entries in same order.
 // 4. Run steps 1 to 3 on ConcurQMutex as well.
 template <size_t ElemSize>
+void ConcurQTester<ElemSize>::SanityTest() {
+  {
+    // 1
+    CHECK(cq_.Pop().get() == nullptr);
+    // 2
+    Elem* p1 = new Elem{};
+    cq_.Push(ElemPtr{p1});
+    ElemPtr up1 = cq_.Pop();
+    CHECK(up1.get() == p1);
+    // 3
+    cq_.Push(std::move(up1));
+    CHECK(up1.get() == nullptr);
+    Elem* p2 = new Elem{};
+    cq_.Push(ElemPtr{p2});
+    up1 = cq_.Pop();
+    CHECK(up1.get() == p1);
+    CHECK(cq_.Pop().get() == p2);
+
+    CHECK(cq_.Pop().get() == nullptr);
+  }
+  // 4
+  {
+    // 1
+    CHECK(cqm_.Pop().get() == nullptr);
+    // 2
+    Elem* p1 = new Elem{};
+    cqm_.Push(ElemPtr{p1});
+    ElemPtr up1 = cqm_.Pop();
+    CHECK(up1.get() == p1);
+    // 3
+    cqm_.Push(std::move(up1));
+    CHECK(up1.get() == nullptr);
+    Elem* p2 = new Elem{};
+    cqm_.Push(ElemPtr{p2});
+    up1 = cqm_.Pop();
+    CHECK(up1.get() == p1);
+    CHECK(cqm_.Pop().get() == p2);
+
+    CHECK(cqm_.Pop().get() == nullptr);
+  }
+}
+
+// 1. Producer Threads produce from 1 to NUM_ELEMS, 
+//    NUM_ELEMS+1 to 2*NUM_ELEMS, etc.
+// 2. Consumer Threads consume numbers.
+// 3. Validate all numbers produced are consumed by matching the sum
+template <size_t ElemSize>
 void ConcurQTester<ElemSize>::BasicTest() {
-  CHECK(cq_.Pop().get() == nullptr);
-  Elem* p1 = new Elem{};
-  cq_.Push(ElemPtr{p1});
-  ElemPtr up1 = cq_.Pop();
-  CHECK(up1.get() == p1);
+  constexpr int NUM_PROS  = 2;
+  constexpr int NUM_CONS  = 2;
+  constexpr int NUM_ELEMS = 5;
+  
+  std::array<std::thread, NUM_PROS+NUM_CONS> ths;
+  std::atomic_int val{0};
+  int  val_expected=0;
 
-  cq_.Push(std::move(up1));
-  CHECK(up1.get() == nullptr);
-  Elem* p2 = new Elem{};
-  cq_.Push(ElemPtr{p2});
+  for (int i=0; i<NUM_PROS;++i) {
+    for (int j=i*NUM_ELEMS; j<(i+1)*NUM_ELEMS; ++j)
+      val_expected += j+1;
+  }
 
-  up1 = cq_.Pop();
-  CHECK(up1.get() == p1);
-  CHECK(cq_.Pop().get() == p2);
+  for (int i=0; i<NUM_PROS;++i) {
+    ths[i] = std::thread([this, i](){
+        for (int j=i*NUM_ELEMS; j<(i+1)*NUM_ELEMS; ++j)
+          cq_.Push(ElemPtr{new Elem(j+1)});
+      });
+  }
+  for (int i=NUM_PROS; i<NUM_PROS+NUM_CONS;++i) {
+    ths[i] = std::thread([this, val_expected](std::atomic_int& v){
+        // loop until all the numbers produced are not consumed
+        for(;;) {
+          int v_acc = v.load();
+          ElemPtr p = cq_.Pop();
+          CHECK_LE(v_acc, val_expected);
+          if (p) {
+            int value = *p;
+            v.fetch_add(value);
+          } else if (v_acc == val_expected) {
+            return;
+          }
+        }
+      }, std::ref(val));
+  }
 
-  CHECK(cq_.Pop().get() == nullptr);
+  // All producers and consumers join with the mainline threads
+  for (int i=0; i<NUM_PROS+NUM_CONS;++i)
+    ths[i].join();
+
+  CHECK_EQ(val.load(), val_expected);
 }
 
 template <size_t ElemSize>
-void ConcurQTester<ElemSize>::ProduceStressTest() {}
+void ConcurQTester<ElemSize>::ProduceStressTest() {
+}
 template <size_t ElemSize>
 void ConcurQTester<ElemSize>::ConsumeStressTest() {}
 template <size_t ElemSize>
@@ -164,6 +251,7 @@ int main(int argc, char *argv[]) {
   Init::InitEnv(&argc, &argv);
 
   ConcurQTester<ElemSize1> test{};
+  test.SanityTest();
   test.BasicTest();
   test.ProduceStressTest();
   test.ConsumeStressTest();
