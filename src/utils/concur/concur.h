@@ -13,18 +13,18 @@
 // limitations under the License.
 //
 
-#ifndef _UTILS_CONCUR_MONITOR_H_
-#define _UTILS_CONCUR_MONITOR_H_
+#ifndef _UTILS_CONCUR_CONCUR_H_
+#define _UTILS_CONCUR_CONCUR_H_
 
-//! @file   monitor.h
-//! @brief  Wrapper executes functions synchronously.
-//! @detail Ensures calls are thread safe by taking mutual exclusion lock.
+//! @file   concur.h
+//! @brief  Wrapper executes functions asynchronously on another thread.
+//! @detail Ensures calls are thread safe by always serializing the execution
+//!         in the context of the thread owned by the wrapper class
 //!
 //! @author Arijit Sarcar <sarcar_a@yahoo.com>
 
 // C++ Standard Headers
 #include <functional>           // std::function
-#include <mutex>                // std::lock_guard
 // C Standard Headers
 // Google Headers
 // Local Headers
@@ -36,24 +36,24 @@
 namespace asarcar { namespace utils { namespace concur {
 //-----------------------------------------------------------------------------
 template <typename T>
-class Monitor {
- private:
-  mutable T              t_; // decltype reference needs t_ defined first
-  mutable std::mutex     m_;
+class Concur {
  public:
-  explicit Monitor(T&& t): t_{std::move(t)} {}
-  ~Monitor() = default;
+  explicit Concur(T&& t): t_{std::move(t)} {}
+  ~Concur() = default;
   // Prevent bad usage: copy and assignment of Monitor
-  Monitor(const Monitor&)             = delete;
-  Monitor& operator =(const Monitor&) = delete;
-  Monitor(Monitor&&)             = delete;
-  Monitor& operator =(Monitor&&) = delete;
+  Concur(const Concur&)             = delete;
+  Concur& operator =(const Concur&) = delete;
+  Concur(Concur&&)                  = delete;
+  Concur& operator =(Concur&&)      = delete;
 
   template <typename F> 
   auto operator()(F f) const -> decltype(f(t_)) { 
     std::lock_guard<std::mutex> _{m_};
     return f(t_);
   }
+ private:
+  mutable T              t_;
+  mutable std::mutex     m_;
 };
 
 //-----------------------------------------------------------------------------

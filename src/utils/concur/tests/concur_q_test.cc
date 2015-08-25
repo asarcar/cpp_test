@@ -27,6 +27,7 @@
 #include "utils/basic/clock.h"
 #include "utils/basic/init.h"
 #include "utils/concur/concur_q.h"
+#include "utils/concur/concur_block_q.h"
 
 using namespace asarcar;
 using namespace asarcar::utils;
@@ -35,61 +36,6 @@ using namespace asarcar::utils::concur;
 // Declarations
 DECLARE_bool(auto_test);
 DECLARE_bool(benchmark);
-
-template <typename ValueType>
-class ConcurQMutex {
- public:
-  using ValueTypePtr = std::unique_ptr<ValueType>;
- private:
-  struct Node {
-    Node(ValueTypePtr&& val) : val_{std::move(val)}, next_{nullptr} {}
-    ValueTypePtr  val_;
-    Node*  next_;
-  };
- public:
-  ConcurQMutex(): lck_{} {
-    // create sentinel object
-    head_ = tail_ = new Node(ValueTypePtr{});
-  }
-  ~ConcurQMutex() {
-    Node *tmpn;
-    for (Node *tmp = head_; tmp != nullptr; tmp = tmpn) {
-      tmpn = tmp->next_;
-      delete tmp->val_.release();
-      delete tmp;
-    }
-  }
-
-  void Push(ValueTypePtr&& val) {
-    Node* np = new Node(std::move(val));
-    lock_guard<std::mutex> lg{lck_};
-    tail_->next_ = np;
-    tail_        = np;
-    return;
-  }
-
-  ValueTypePtr Pop(void) {
-    Node*         prev_head;
-    ValueTypePtr  val{nullptr};
-    {
-      // protect all consumers from critical region
-      lock_guard<std::mutex> lg{lck_};
-      Node* new_head = head_->next_;
-      if (new_head == nullptr)
-        return val;
-      prev_head = head_;
-      head_ = new_head;
-      val.swap(head_->val_); // val.reset(sentinel_->val_.release())
-    }
-    delete prev_head;
-    return val; 
-  }
-
- private:
-  std::mutex        lck_;
-  Node*             head_;
-  Node*             tail_;
-};
 
 template <size_t ElemSize>
 class ConcurQTester {
@@ -118,6 +64,7 @@ class ConcurQTester {
   void ProduceStressTest();
   void ConsumeStressTest();
   void ProduceConsumeStressTest();
+  void BlockingPopTest();
   void BenchmarkTest();
 
  private:
@@ -131,10 +78,8 @@ class ConcurQTester {
   static constexpr int kNumThsHigh        = 2;
   static constexpr int kNumThsStress      = 8;
 
-
-
   ConcurQ<Elem>       cq_{};
-  ConcurQMutex<Elem>  cqm_{}; 
+  ConcurBlockQ<Elem>  cbq_{}; 
 
   template <typename QueueType>
   void HelperSanityTest(QueueType& q);
@@ -173,29 +118,29 @@ template <size_t ElemSize>
 template <typename QueueType>
 void ConcurQTester<ElemSize>::HelperSanityTest(QueueType& q) {
   // 1
-  CHECK(q.Pop().get() == nullptr);
+  CHECK(q.TryPop().get() == nullptr);
   // 2
   Elem* p1 = new Elem{};
   q.Push(ElemPtr{p1});
-  ElemPtr up1 = q.Pop();
+  ElemPtr up1 = q.TryPop();
   CHECK(up1.get() == p1);
   // 3
   q.Push(std::move(up1));
   CHECK(up1.get() == nullptr);
   Elem* p2 = new Elem{};
   q.Push(ElemPtr{p2});
-  up1 = q.Pop();
+  up1 = q.TryPop();
   CHECK(up1.get() == p1);
-  CHECK(q.Pop().get() == p2);
+  CHECK(q.TryPop().get() == p2);
   
-  CHECK(q.Pop().get() == nullptr);
+  CHECK(q.TryPop().get() == nullptr);
 }
 
-// Run SanityTest on ConcurQ and ConcurQMutex as well.
+// Run SanityTest on ConcurQ and ConcurBlockQ as well.
 template <size_t ElemSize>
 void ConcurQTester<ElemSize>::SanityTest() {
   HelperSanityTest(cq_);
-  HelperSanityTest(cqm_);
+  HelperSanityTest(cbq_);
 }
 
 // 1. Producer Thread One produce from 1 to NUM_ELEMS, 
@@ -226,7 +171,7 @@ void ConcurQTester<ElemSize>::HelperStressTest(QueueType& q) {
         // loop until all the numbers produced are not consumed
         for(;;) {
           int v_acc = v.load();
-          ElemPtr p = q.Pop();
+          ElemPtr p = q.TryPop();
           CHECK_LE(v_acc, val_expected);
           if (p) {
             int value = *p;
@@ -251,6 +196,7 @@ void ConcurQTester<ElemSize>::HelperStressTest(QueueType& q) {
 template <size_t ElemSize>
 void ConcurQTester<ElemSize>::BasicTest() {
   HelperStressTest<kNumElemsLow, kNumThsLow, kNumThsLow>(cq_);
+  HelperStressTest<kNumElemsLow, kNumThsLow, kNumThsLow>(cbq_);
 }
 
 // High# of producers produce numbers from 1 to Mid# of Elems
@@ -259,6 +205,7 @@ void ConcurQTester<ElemSize>::BasicTest() {
 template <size_t ElemSize>
 void ConcurQTester<ElemSize>::ProduceStressTest() {
   HelperStressTest<kNumElemsMid, kNumThsHigh, kNumThsLow>(cq_);
+  HelperStressTest<kNumElemsMid, kNumThsHigh, kNumThsLow>(cbq_);
 }
 
 // Low# of producers produce numbers from 1 to High# of Elems
@@ -267,6 +214,7 @@ void ConcurQTester<ElemSize>::ProduceStressTest() {
 template <size_t ElemSize>
 void ConcurQTester<ElemSize>::ConsumeStressTest() {
   HelperStressTest<kNumElemsHigh, kNumThsLow, kNumThsHigh>(cq_);
+  HelperStressTest<kNumElemsHigh, kNumThsLow, kNumThsHigh>(cbq_);
 }
 
 // High# of producers produce numbers from 1 to Mid# of Elems
@@ -275,6 +223,43 @@ void ConcurQTester<ElemSize>::ConsumeStressTest() {
 template <size_t ElemSize>
 void ConcurQTester<ElemSize>::ProduceConsumeStressTest() {
   HelperStressTest<kNumElemsMid, kNumThsHigh, kNumThsHigh>(cq_);
+  HelperStressTest<kNumElemsMid, kNumThsHigh, kNumThsHigh>(cbq_);
+}
+
+// Parent thread adds an element to Q
+// Child thread that Pops twice and records time for each successful pop.
+// Parent thread sleeps for 1000 us.
+// Parent thread adds another element to Q.
+// Validate that first pop succeeds immediately and second pop after 1000us.
+template <size_t ElemSize>
+void ConcurQTester<ElemSize>::BlockingPopTest() {
+  struct PopTime {
+    Clock::TimePoint first{};
+    Clock::TimePoint second{};
+  };
+  PopTime t;
+
+  Clock::TimePoint start = Clock::USecs();
+
+  Elem *p = new Elem{};
+  Elem *p2 = new Elem{};
+
+  cbq_.Push(ElemPtr{p});
+  std::thread th([this, p, p2, &t](){
+      CHECK(cbq_.Pop().get() == p);
+      t.first = Clock::USecs();
+      CHECK(cbq_.Pop().get() == p2);
+      t.second = Clock::USecs();    
+    });
+
+  std::this_thread::sleep_for(Clock::TimeUSecs(kSleepDuration)); 
+  cbq_.Push(ElemPtr{p2});
+  th.join();
+
+  Clock::TimeDuration first_dur= t.first - start;
+  Clock::TimeDuration second_dur = t.second - start;
+  CHECK_LT(first_dur, kSleepDuration);
+  CHECK_GT(second_dur, kSleepDuration);
 }
 
 // (a) Concurrent Q Case:
@@ -288,13 +273,13 @@ void ConcurQTester<ElemSize>::ProduceConsumeStressTest() {
 // Compare the two run times (a) and (b)
 template <size_t ElemSize>
 void ConcurQTester<ElemSize>::BenchmarkTest() {
-  Clock::TimePoint    nowCQM = Clock::USecs();
-  HelperStressTest<kNumElemsStress, kNumThsStress, kNumThsStress>(cqm_);
-  Clock::TimeDuration durCQM = Clock::USecs() - nowCQM;
-
   Clock::TimePoint    nowCQ = Clock::USecs();
   HelperStressTest<kNumElemsStress, kNumThsStress, kNumThsStress>(cq_);
   Clock::TimeDuration durCQ = Clock::USecs() - nowCQ;
+
+  Clock::TimePoint    nowCQM = Clock::USecs();
+  HelperStressTest<kNumElemsStress, kNumThsStress, kNumThsStress>(cbq_);
+  Clock::TimeDuration durCQM = Clock::USecs() - nowCQM;
 
   LOG(INFO) << "TIME:" << std::endl
             << "#ElemSize " << ElemSize << std::endl
@@ -308,7 +293,7 @@ void ConcurQTester<ElemSize>::BenchmarkTest() {
 }
 
 template <typename ConQTester>
-void HelperConQTester(ConQTester&& cqt) {
+void HelperConQTester(ConQTester& cqt) {
   cqt.SanityTest();
   cqt.BasicTest();
   cqt.ProduceStressTest();
@@ -326,8 +311,14 @@ int main(int argc, char *argv[]) {
 
   Init::InitEnv(&argc, &argv);
 
-  HelperConQTester(ConcurQTester<kElemSizeLow>{});
-  HelperConQTester(ConcurQTester<kElemSizeHigh>{});
+  ConcurQTester<kElemSizeLow> cqt{};
+  ConcurQTester<kElemSizeHigh> cqt2{};
+
+  HelperConQTester(cqt);
+  HelperConQTester(cqt2);
+
+  // Test the blocking Pop
+  cqt.BlockingPopTest();
 
   return 0;
 }

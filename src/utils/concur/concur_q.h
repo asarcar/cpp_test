@@ -16,9 +16,11 @@
 #ifndef _UTILS_CONCUR_CONCUR_Q_H_
 #define _UTILS_CONCUR_CONCUR_Q_H_
 
-//! @file   concur_queue.h
-//! @brief  Concurrent Queue allowing multiple producers and consumers
-//! @detail This queue uses two exclusive spinlocks - one for producers
+//! @file   concur_q.h
+//! @brief  Concurrent Q: NonBlocking even when Pop is "tried" in empty Q
+//! @detail Efficiency is realized via SpinLocks naturally assuming
+//!         threads are not CPU starved - specifically SpinLock threads.
+//!         This queue uses two exclusive spinlocks - one for producers
 //!         other for consumers. Many concurrent queue implementations are 
 //!         inspired from the following papers:
 //!         1. "Simple, Fast and Practical Non-Blocking and Blocking 
@@ -92,7 +94,7 @@ class ConcurQ {
   void Push(ValueTypePtr&& val) {
     Node* tmp = new Node(std::move(val)); // ensure node alloc succeeds, then release
     // protect critical region form all producers
-    lock_guard<SpinLock> slg{pro_lck_};
+    lock_guard<SpinLock> _{pro_lck_};
     tail_->next_ = tmp;
     // Never change the below below line of code to 
     //   tail_ = tail_->next
@@ -102,14 +104,14 @@ class ConcurQ {
     return;
   }
 
-  // Pops the element at the head of the Q
-  // If Q is empty returns null
-  ValueTypePtr Pop(void) {
+  // Nonblocking: 
+  // TryPop: Pops the element at the head of the Q. If Q is empty returns nullptr
+  ValueTypePtr TryPop(void) {
     Node* prev_sentinel;
     ValueTypePtr  val{nullptr};
     {
       // protect all consumers from critical region
-      lock_guard<SpinLock> slg{con_lck_};
+      lock_guard<SpinLock> _{con_lck_};
       Node* candidate_sentinel = sentinel_->next_;
       if (candidate_sentinel == nullptr)
         return nullptr;
