@@ -44,6 +44,7 @@
 // Google Headers
 #include <glog/logging.h>   
 // Local Headers
+#include "utils/basic/meta.h"       // Conditional
 #include "utils/basic/proc_info.h"
 #include "utils/concur/lock_guard.h"
 #include "utils/concur/spin_lock.h"
@@ -58,11 +59,17 @@ template <typename ValueType>
 class ConcurQ {
  public:
   using ValueTypePtr = std::unique_ptr<ValueType>;
-
+  // NodeValueType: For small objects we embed the object inside
+  // Any object around 1/2 the CACHE LINE SIZE is considered a small object
+  // We leave 1/2 CACHE LINE SIZE for meta data and Node specific fields
+  using NodeValueType = 
+      Conditional<(sizeof(ValueType) <= (CACHE_LINE_SIZE >> 1)), 
+                  ValueType, ValueTypePtr>;
+ 
  private:
   struct Node {
-    Node(ValueTypePtr&& val) : val_{std::move(val)}, next_(nullptr) {}
-    ValueTypePtr val_;
+    Node(NodeValueType&& val) : val_{std::move(val)}, next_(nullptr) {}
+    NodeValueType      val_;
     // atomic next_: ensures DRF (Data Race Free) as written by 
     // producers (linking new items) and read by consumers (checking 
     // whether any more items exist.
@@ -73,15 +80,14 @@ class ConcurQ {
   // Constructor: assumed called from a single thread
   ConcurQ(): con_lck_{}, pro_lck_{} {
     // create sentinel node: head and tail point when Q is empty
-    sentinel_ = tail_ = new Node(ValueTypePtr{});
+    sentinel_ = tail_ = new Node(NodeValueType{});
   }
   // Destructor: assumed called from a single thread
   ~ConcurQ() {
     Node *tmpn;
     for (Node *tmp = sentinel_; tmp != nullptr; tmp = tmpn) {
       tmpn = tmp->next_;
-      delete tmp->val_.release();
-      delete tmp;
+      delete tmp; // if val_ unique_ptr implicit call to tmp->val_.release();
     }
   }
   // Prevent bad usage: copy and assignment
@@ -91,7 +97,7 @@ class ConcurQ {
   ConcurQ& operator =(ConcurQ&&)      = delete;
 
   // Pushes a new element to the tail of the Q.
-  void Push(ValueTypePtr&& val) {
+  void Push(NodeValueType&& val) {
     Node* tmp = new Node(std::move(val)); // ensure node alloc succeeds, then release
     // protect critical region form all producers
     lock_guard<SpinLock> _{pro_lck_};
@@ -106,18 +112,18 @@ class ConcurQ {
 
   // Nonblocking: 
   // TryPop: Pops the element at the head of the Q. If Q is empty returns nullptr
-  ValueTypePtr TryPop(void) {
-    Node* prev_sentinel;
-    ValueTypePtr  val{nullptr};
+  NodeValueType TryPop(void) {
+    Node*         prev_sentinel;
+    NodeValueType val{};
     {
       // protect all consumers from critical region
       lock_guard<SpinLock> _{con_lck_};
       Node* candidate_sentinel = sentinel_->next_;
       if (candidate_sentinel == nullptr)
-        return nullptr;
+        return val;
       prev_sentinel = sentinel_;
       sentinel_ = candidate_sentinel;
-      val.swap(sentinel_->val_); // val.reset(sentinel_->val_.release())
+      Swap(val, sentinel_->val_); 
     }
     delete prev_sentinel;
     return val; 
@@ -132,6 +138,15 @@ class ConcurQ {
   // Producer Owned Data & Contention Avoidance Lock
   Node*    tail_ __attribute__ ((aligned (CACHE_LINE_SIZE)));  
   SpinLock pro_lck_ __attribute__ ((aligned (CACHE_LINE_SIZE)));
+
+  static inline void 
+  Swap(ValueTypePtr& val1, ValueTypePtr& val2) {
+    val1.swap(val2); // i.e. val1.reset(val2.release())
+  }
+  static inline void
+  Swap(ValueType& val1, ValueType& val2) {
+    val1 = val2; val2 = 0;
+  }
 };
 //-----------------------------------------------------------------------------
 } } } // namespace asarcar { namespace utils { namespace concur {

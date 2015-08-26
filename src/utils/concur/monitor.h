@@ -23,11 +23,12 @@
 //! @author Arijit Sarcar <sarcar_a@yahoo.com>
 
 // C++ Standard Headers
-#include <functional>           // std::function
-#include <mutex>                // std::lock_guard
+#include <functional>                     // std::function
+#include <thread>                         // std::thread
 // C Standard Headers
 // Google Headers
 // Local Headers
+#include "utils/concur/concur_block_q.h"  // std::lock_guard
 
 //! @addtogroup utils
 //! @{
@@ -38,7 +39,7 @@ namespace asarcar { namespace utils { namespace concur {
 template <typename T>
 class Monitor {
  private:
-  mutable T              t_; // decltype reference needs t_ defined first
+  mutable T              t_;
   mutable std::mutex     m_;
  public:
   explicit Monitor(T&& t): t_{std::move(t)} {}

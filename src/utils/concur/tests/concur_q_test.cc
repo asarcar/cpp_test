@@ -40,21 +40,63 @@ DECLARE_bool(benchmark);
 template <size_t ElemSize>
 class ConcurQTester {
  public:
+  static_assert(ElemSize >= 4, "Minimum object size is 4 bytes");
+
   class Elem {
    public:
-    static_assert(ElemSize >= 4, "Minimum object size is 4 bytes");
+    using ElemPtr = std::unique_ptr<Elem>;
+    using ElemValueType = 
+        Conditional<(ElemSize <= (CACHE_LINE_SIZE >> 1)), Elem, ElemPtr>;
+
     Elem(int num=0) : 
         v{static_cast<uint8_t>(num & 0xff), 
           static_cast<uint8_t>((num >> 8) & 0xff), 
           static_cast<uint8_t>((num >> 16) & 0xff), 
           static_cast<uint8_t>((num >> 24) & 0xff)} {}
-    operator int() {
+    operator int() const {
       return (v.at(0) | v.at(1) << 8 | v.at(2) << 16 | v.at(3) << 24); 
+    }
+
+    static inline bool Equal(const Elem& first, const int second) {
+      return (second == first);
+    }
+    
+    static inline bool Equal(const ElemPtr& first_p, const int second) {
+      return (((!first_p) && (second == 0)) || (second == int(*first_p)));
+    }
+
+    static inline void CheckEqual(const Elem& first, const int second) {
+      CHECK_EQ(int(second), int(first));
+    }
+    
+    static inline void CheckEqual(const ElemPtr& first_p, const int second) {
+      CHECK_EQ(((!first_p) ? 0 : int(*first_p)), second);
+    }
+    
+    static inline int Get(const Elem& first) {
+      return first;
+    }
+
+    static inline int Get(const ElemPtr& first_p) {
+      return ((!first_p)? 0 : int(*first_p));
+    }
+
+    template <size_t Size = ElemSize>
+    static EnableIf<((Size <= (CACHE_LINE_SIZE >> 1)) && 
+                     (Size == ElemSize)), Elem>
+    Create(int num=0) {
+      return Elem{num};
+    }
+
+    template <size_t Size = ElemSize>
+    static EnableIf<((Size > (CACHE_LINE_SIZE >> 1)) && 
+                     (Size == ElemSize)), ElemPtr>
+    Create(int num=0) {
+      return ElemPtr{new Elem{num}};
     }
    private:
     std::array<uint8_t, ElemSize> v;
   };
-  using ElemPtr = std::unique_ptr<Elem>;
 
   ConcurQTester()  = default;
   ~ConcurQTester() = default;
@@ -118,22 +160,18 @@ template <size_t ElemSize>
 template <typename QueueType>
 void ConcurQTester<ElemSize>::HelperSanityTest(QueueType& q) {
   // 1
-  CHECK(q.TryPop().get() == nullptr);
+  Elem::CheckEqual(q.TryPop(), 0);
   // 2
-  Elem* p1 = new Elem{};
-  q.Push(ElemPtr{p1});
-  ElemPtr up1 = q.TryPop();
-  CHECK(up1.get() == p1);
+  q.Push(Elem::Create(1));
+  typename Elem::ElemValueType up1 = q.TryPop();
+  Elem::CheckEqual(up1, 1);
   // 3
+  up1 = Elem::Create(1);
   q.Push(std::move(up1));
-  CHECK(up1.get() == nullptr);
-  Elem* p2 = new Elem{};
-  q.Push(ElemPtr{p2});
-  up1 = q.TryPop();
-  CHECK(up1.get() == p1);
-  CHECK(q.TryPop().get() == p2);
-  
-  CHECK(q.TryPop().get() == nullptr);
+  q.Push(Elem::Create(2));
+  Elem::CheckEqual(q.TryPop(), 1);
+  Elem::CheckEqual(q.TryPop(), 2);
+  Elem::CheckEqual(q.TryPop(), 0);
 }
 
 // Run SanityTest on ConcurQ and ConcurBlockQ as well.
@@ -163,7 +201,7 @@ void ConcurQTester<ElemSize>::HelperStressTest(QueueType& q) {
   for (int i=0; i<NumProducers;++i) {
     ths[i] = std::thread([this, i, &q](){
         for (int j=i*NumElems; j<(i+1)*NumElems; ++j)
-          q.Push(ElemPtr{new Elem(j+1)});
+          q.Push(Elem::Create(j+1));
       });
   }
   for (int i=NumProducers; i<NumProducers+NumConsumers;++i) {
@@ -171,11 +209,10 @@ void ConcurQTester<ElemSize>::HelperStressTest(QueueType& q) {
         // loop until all the numbers produced are not consumed
         for(;;) {
           int v_acc = v.load();
-          ElemPtr p = q.TryPop();
+          typename Elem::ElemValueType p = q.TryPop();
           CHECK_LE(v_acc, val_expected);
-          if (p) {
-            int value = *p;
-            v.fetch_add(value);
+          if (!Elem::Equal(p, 0)) {
+            v.fetch_add(Elem::Get(p));
           } else if (v_acc == val_expected) {
             return;
           }
@@ -241,19 +278,16 @@ void ConcurQTester<ElemSize>::BlockingPopTest() {
 
   Clock::TimePoint start = Clock::USecs();
 
-  Elem *p = new Elem{};
-  Elem *p2 = new Elem{};
-
-  cbq_.Push(ElemPtr{p});
-  std::thread th([this, p, p2, &t](){
-      CHECK(cbq_.Pop().get() == p);
+  cbq_.Push(Elem::Create(1));
+  std::thread th([this, &t](){
+      Elem::CheckEqual(cbq_.Pop(), 1);
       t.first = Clock::USecs();
-      CHECK(cbq_.Pop().get() == p2);
+      Elem::CheckEqual(cbq_.Pop(), 2);
       t.second = Clock::USecs();    
     });
 
   std::this_thread::sleep_for(Clock::TimeUSecs(kSleepDuration)); 
-  cbq_.Push(ElemPtr{p2});
+  cbq_.Push(Elem::Create(2));
   th.join();
 
   Clock::TimeDuration first_dur= t.first - start;
@@ -306,7 +340,7 @@ void HelperConQTester(ConQTester& cqt) {
       
 
 int main(int argc, char *argv[]) {
-  constexpr size_t kElemSizeLow  =    4;
+  constexpr size_t kElemSizeLow  = 4;
   constexpr size_t kElemSizeHigh = 1024;
 
   Init::InitEnv(&argc, &argv);
