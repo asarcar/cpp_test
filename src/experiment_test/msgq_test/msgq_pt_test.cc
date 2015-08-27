@@ -16,8 +16,6 @@
 
 // Standard C++ Headers
 #include <algorithm>   // std::min
-#include <chrono>      // std::chrono
-#include <deque>       // std::deque
 #include <future>      // std::future, std::packaged_task
 #include <iostream>
 #include <numeric>     // std::accumulate
@@ -31,62 +29,40 @@
 #include <glog/logging.h>   
 // Local Headers
 #include "utils/basic/basictypes.h"
+#include "utils/basic/clock.h"
 #include "utils/basic/fassert.h"
 #include "utils/basic/init.h"
+#include "utils/concur/concur_block_q.h"
 
-template <typename T>
-class SyncMsgQ {
- public:
-  SyncMsgQ()                         = default;
-  ~SyncMsgQ()                        = default;
-  SyncMsgQ(const SyncMsgQ& o)            = delete;
-  SyncMsgQ& operator=(const SyncMsgQ& o) = delete;
-  SyncMsgQ(SyncMsgQ&& o): 
-      _cv{std::move(o._cv)}, _m{std::move(o._m)}, _q{std::move(o._q)} {}
-  SyncMsgQ& operator=(SyncMsgQ&& o) {
-    _cv = std::move(o._cv);
-    _m = std::move(o._m);
-    _q = std::move(o._q);
-  }
-  void push(T&& val) {
-    {
-      std::lock_guard<std::mutex> lck{_m};
-      _q.push_back(std::move(val));
-    }
-    // unlocked before notify so that we avoid unnecessary locking of the woken task
-    _cv.notify_one();
-  }
-  T pop(void) {
-    std::unique_lock<std::mutex> lck{_m};
-    _cv.wait(lck, [this](){return !this->_q.empty();});
-    T res = std::move(_q.front());
-    _q.pop_front();
-    return res;
-  }
- private:
-  std::condition_variable _cv;
-  std::mutex              _m;
-  std::deque<T>           _q;  
-};    
+using namespace std;
+using namespace asarcar;
+using namespace asarcar::utils;
+using namespace asarcar::utils::concur;
 
 class ServerPool {
  public:
-  using Fn = uint32_t(const std::vector<uint32_t>&, uint32_t, uint32_t);
+  using Fn = uint32_t(std::vector<uint32_t>*, uint32_t, uint32_t);
   using PackageTaskType = std::packaged_task<Fn>;
   struct QElem {
-    const std::vector<uint32_t>&    vals;
+    std::vector<uint32_t>*          val_p;
     uint32_t                        first;
     uint32_t                        last;
     PackageTaskType                 pt;
 
-    QElem(const std::vector<uint32_t>& v, uint32_t f, uint32_t l, PackageTaskType &&p) :
-        vals{v}, first{f}, last{l}, pt{std::move(p)} {};
-    ~QElem()                        = default;
-    QElem(const QElem& o)           = delete;
-    QElem& operator=(const QElem& o)= delete;
+    QElem():val_p{}, first{}, last{}, pt{} {};
+    QElem(std::vector<uint32_t>* v_p, uint32_t f, uint32_t l, PackageTaskType &&p) :
+        val_p{v_p}, first{f}, last{l}, pt{std::move(p)} {};
+    ~QElem() = default;
+
     QElem(QElem &&o) : 
-        vals{o.vals}, first{o.first}, last{o.last}, pt{std::move(o.pt)} {};
-    QElem& operator=(QElem &&o)     = delete;
+        val_p{o.val_p}, first{o.first}, last{o.last}, pt{std::move(o.pt)} {}
+    QElem& operator=(QElem&& o) {
+      val_p = o.val_p; first = o.first; last = o.last; pt = std::move(o.pt);
+      return *this;
+    }
+
+    QElem(const QElem& o) = delete;
+    QElem& operator=(const QElem& o) = delete;
   };
 
   explicit ServerPool(uint32_t num_threads) {
@@ -98,10 +74,10 @@ class ServerPool {
           std::thread(    
               [this]()->void {
                 while (true) {
-                  QElem e = this->_sync_msg_q.pop();
+                  QElem e = this->_sync_msg_q.Pop();
                   LOG(INFO) << "TH " << std::hex << std::this_thread::get_id() 
                             << ": QElem popped: val " 
-                            << std::hex << e.vals.data()
+                            << std::hex << e.val_p->data()
                             << std::dec << ": range: [" 
                             << e.first << "," << e.last << ")";
                   // dummy range: signal terminate thread
@@ -109,7 +85,7 @@ class ServerPool {
                     LOG(INFO) << "TH " << std::hex << std::this_thread::get_id() << " terminated!";
                     return;
                   }
-                  e.pt(std::cref(e.vals), e.first, e.last);
+                  e.pt(e.val_p, e.first, e.last);
                 }
                 return;
               });
@@ -127,13 +103,13 @@ class ServerPool {
 
   // Interface used by users to submit task to ServerPool
   void submit_task(QElem &&e) {
-    _sync_msg_q.push(std::move(e));
+    _sync_msg_q.Push(std::move(e));
     return;
   }
   // Ensure that all threads have completed termination from system perspective 
   void join_threads(void);
  private:
-  SyncMsgQ<QElem>                           _sync_msg_q;
+  ConcurBlockQ<QElem>                       _sync_msg_q;
   std::vector<std::thread>                  _th_pool;
 };
 
@@ -229,11 +205,11 @@ ServerPoolTest::ServerPoolTest(int argc, char **argv) :
 void ServerPoolTest::submit_tasks(void) {
   // Create tasks for each range i.e. a computation unit
   std::function<ServerPool::Fn> acc_fn = 
-      [](const std::vector<uint32_t>& v, 
+      [](std::vector<uint32_t>* v_p, 
          uint32_t first, uint32_t last) -> uint32_t {
-    uint32_t val = std::accumulate(v.begin() + first, v.begin() + last, 0);
+    uint32_t val = std::accumulate(v_p->begin() + first, v_p->begin() + last, 0);
     LOG(INFO) << "TH " << std::hex << std::this_thread::get_id() 
-    << " SUM of vector " << std::hex << v.data() 
+    << " SUM of vector " << std::hex << v_p->data() 
     << ": compute range [" << std::dec
     << first  << "," << last << ") = " << val;
     return val;
@@ -244,19 +220,17 @@ void ServerPoolTest::submit_tasks(void) {
   for (int i=0; i<static_cast<int>(_range); ++i) {
     ServerPool::PackageTaskType pt{acc_fn};
     _fu_pool.push_back(pt.get_future());
-    ServerPool::QElem e = {std::cref(_vals), _lims[i], _lims[i+1], std::move(pt)};
+    ServerPool::QElem e = {&_vals, _lims[i], _lims[i+1], std::move(pt)};
     _sp.submit_task(std::move(e));
   }
 
   // Now that all computation requests are inserted
   // create dummy computation terminate requests
-#if 0
   for (uint32_t i=0; i<_num_ths; ++i) {
     // Packaged Task: default ctor does not hold any task: no exception
-    ServerPool::QElem e = {std::cref(_vals), 0, 0, ServerPool::PackageTaskType{}};
+    ServerPool::QElem e = {&_vals, 0, 0, ServerPool::PackageTaskType{}};
     _sp.submit_task(std::move(e));
   }
-#endif
 
   return;
 }
@@ -294,25 +268,13 @@ void ServerPoolTest::disp_state(void) {
   DLOG(INFO) << "Size " << _siz << ": Range " << _range 
              << ": NumThs " << _num_ths << std::endl;
   
-  DLOG(INFO) << "Values: #elem " << _vals.size() << std::endl;
-  uint32_t i=0;
-  for (auto &val: _vals) {
-    DLOG(INFO) << ": [" << i++ << "]" << val;
-    if ((i+1)%8 == 0)
-      DLOG(INFO) << std::endl;
-  }
-  DLOG(INFO) << std::endl;
-  
-  DLOG(INFO) << "Range: #elem " << _lims.size() << std::endl;
-  i=0;
+  DLOG(INFO) << "Values: 1.." << _vals.size() << ": in vector of size " << _vals.size();
+  DLOG(INFO) << "Broken in #Ranges " << _lims.size();
+  int i=0;
   for (auto &val: _lims) {
     DLOG(INFO) << ": [" << i++ << "]" << val;
-    if ((i+1)%8 == 0)
-      DLOG(INFO) << std::endl;
   }
-  DLOG(INFO) << std::endl;
-  
-  DLOG(INFO) << "Total Sum " << _sum << std::endl;
+  DLOG(INFO) << "Total Sum " << _sum;
   
   return;
 }
@@ -322,15 +284,13 @@ int main(int argc, char **argv) {
   try {
     ServerPoolTest spt(argc, argv);
     
-    std::chrono::time_point<std::chrono::system_clock> start = std::chrono::system_clock::now();
+    Clock::TimePoint start = Clock::USecs();
     spt.submit_tasks();
     uint32_t sum = spt.compute_sum();
-    std::chrono::time_point<std::chrono::system_clock> end = std::chrono::system_clock::now();
-    std::chrono::milliseconds dur = 
-        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    Clock::TimeDuration dur = Clock::USecs() - start;
     spt.join_threads();
     spt.disp_state();
-    std::cout << "Computed Sum " << sum << " in " << dur.count() << " milli secs" << std::endl;
+    std::cout << "Computed Sum " << sum << " in " << dur << " usecs" << std::endl;
   }
   catch(const std::string &s) {
     LOG(WARNING) << "String Exception caught: " << s << std::endl;

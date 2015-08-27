@@ -32,7 +32,7 @@
 #include "utils/basic/basictypes.h"
 #include "utils/basic/fassert.h"
 #include "utils/basic/init.h"
-#include "utils/concur/sync_queue.h"
+#include "utils/concur/concur_block_q.h"
 
 //! @addtogroup utils
 //! @{
@@ -56,7 +56,7 @@ class ServerThreadPool {
 
   // Interface used by users to submit task to ServerThreadPool
   void submit_task(F&& f) {
-    _sync_msg_q.push(std::move(f));
+    _sync_msg_q.Push(std::move(f));
     return;
   }
 
@@ -69,7 +69,7 @@ class ServerThreadPool {
     return;
   }
  private:
-  SyncMsgQ<F>                               _sync_msg_q;
+  ConcurBlockQ<F>                           _sync_msg_q;
   std::vector<std::thread>                  _th_pool;
 };
 
@@ -85,7 +85,7 @@ ServerThreadPool<F>::ServerThreadPool(uint32_t num_threads) {
         std::thread(    
             [this]()->void {
               while (true) {
-                F f = this->_sync_msg_q.pop();
+                F f = this->_sync_msg_q.Pop();
                 DLOG(INFO) << "TH " << std::hex << std::this_thread::get_id() 
                            << ": Fn object popped";
                 // dummy event posted: signal terminate thread

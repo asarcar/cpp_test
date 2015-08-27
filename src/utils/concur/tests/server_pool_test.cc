@@ -33,7 +33,7 @@
 #include "utils/basic/basictypes.h"
 #include "utils/basic/fassert.h"
 #include "utils/basic/init.h"
-#include "utils/concur/sync_queue.h"
+#include "utils/concur/concur_block_q.h"
 #include "utils/concur/server_thread_pool.h"
 
 using namespace asarcar;

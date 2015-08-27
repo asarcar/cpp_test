@@ -18,8 +18,10 @@
 
 //! @file   concur.h
 //! @brief  Wrapper executes functions asynchronously on another thread.
-//! @detail Ensures calls are thread safe by always serializing the execution
-//!         in the context of the thread owned by the wrapper class
+//! @detail Ensures calls are thread safe and non-blocking on the calling
+//!         thread. It serializing the execution by running blocking calls
+//!         on another thread that is owned by the wrapper class. 
+//!         Herb Sutter: Concurrency.
 //!
 //! @author Arijit Sarcar <sarcar_a@yahoo.com>
 
@@ -28,6 +30,7 @@
 // C Standard Headers
 // Google Headers
 // Local Headers
+#include "utils/concur/concur_block_q.h"  // std::lock_guard
 
 //! @addtogroup utils
 //! @{
@@ -37,9 +40,29 @@ namespace asarcar { namespace utils { namespace concur {
 //-----------------------------------------------------------------------------
 template <typename T>
 class Concur {
+  using Fn  = std::function<void()>;
+  using Cbq = ConcurBlockQ<Fn>;
+ private:
+  mutable T     t_; // decltype reference needs t_ defined first
+  Cbq           q_;
+  // except one time initialization, done_ is only examined or written
+  // in the context of the helper thread
+  bool          done_;
+  // all functions enQd to q_ are executed helper thd_'s context
+  // helper_thd_ keeps deQing functions until done_ is set to true 
+  std::thread   helper_thd_; 
  public:
-  explicit Concur(T&& t): t_{std::move(t)} {}
-  ~Concur() = default;
+  explicit Concur(T&& t): 
+    t_{std::move(t)}, q_{}, done_{false},
+    helper_thd_{std::thread([=](){while(!done_) q_.Pop()();})}
+  {}
+  // enQ a function that terminates helper thread loop by setting done_
+  // (done_ is set in the context of helper_thd_. Hence there is 
+  // no race condition). wait for the helper_thd_ to terminate execution
+  ~Concur() {
+    q_.Push([](){done_ = true;});
+    helper_thd_.join();
+  }
   // Prevent bad usage: copy and assignment of Monitor
   Concur(const Concur&)             = delete;
   Concur& operator =(const Concur&) = delete;
@@ -47,16 +70,30 @@ class Concur {
   Concur& operator =(Concur&&)      = delete;
 
   template <typename F> 
-  auto operator()(F f) const -> decltype(f(t_)) { 
-    std::lock_guard<std::mutex> _{m_};
-    return f(t_);
+  auto operator()(F f) const -> std::future<decltype(f(t_))> { 
+    auto pro_p = make_shared<std::promise<decltype(f(t_))>>();
+    auto fut = pro_p->get_future();
+    q_.Push(
+        [=]() {
+          try { pro_p->set_value(f(t_)); }
+          catch { pro_p->set_exception(current_exception()); }
+        }
+    ); 
+    return fut;
   }
  private:
-  mutable T              t_;
-  mutable std::mutex     m_;
+  template <typename F, typename Ret>
+  void SetValue(std::promise<Ret>& pro, F& f) {
+    pro.set_value(f(t_));
+  }
+  template <typename F>
+  void SetValue(std::promise<void>& pro, F& f) {
+    f(t_);
+    pro.set_value();
+  }
 };
 
 //-----------------------------------------------------------------------------
 } } } // namespace asarcar { namespace utils { namespace concur {
 
-#endif // _UTILS_CONCUR_MONITOR_H_
+#endif // _UTILS_CONCUR_CONCUR_H_
