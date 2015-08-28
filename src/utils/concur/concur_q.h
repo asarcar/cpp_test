@@ -145,7 +145,7 @@ class ConcurQ {
   }
   static inline void
   Swap(ValueType& val1, ValueType& val2) {
-    val1 = val2; val2 = 0;
+    val1 = std::move(val2); val2 = ValueType{};
   }
 };
 //-----------------------------------------------------------------------------

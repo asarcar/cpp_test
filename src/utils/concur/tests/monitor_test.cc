@@ -1,4 +1,4 @@
-// Copyright 2014 asarcar Inc.
+// Copyright 2015 asarcar Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,9 +36,7 @@ using namespace std;
 
 // Declarations
 DECLARE_bool(auto_test);
-DECLARE_bool(auto_test);
 DECLARE_int32(num_incs);
-
 
 constexpr int NUM_THS           = 32;
 // # of times we change value

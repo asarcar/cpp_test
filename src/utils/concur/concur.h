@@ -27,6 +27,7 @@
 
 // C++ Standard Headers
 #include <functional>           // std::function
+#include <future>               // std::future
 // C Standard Headers
 // Google Headers
 // Local Headers
@@ -44,7 +45,7 @@ class Concur {
   using Cbq = ConcurBlockQ<Fn>;
  private:
   mutable T     t_; // decltype reference needs t_ defined first
-  Cbq           q_;
+  mutable Cbq   q_;
   // except one time initialization, done_ is only examined or written
   // in the context of the helper thread
   bool          done_;
@@ -60,7 +61,7 @@ class Concur {
   // (done_ is set in the context of helper_thd_. Hence there is 
   // no race condition). wait for the helper_thd_ to terminate execution
   ~Concur() {
-    q_.Push([](){done_ = true;});
+    q_.Push([=](){done_ = true;});
     helper_thd_.join();
   }
   // Prevent bad usage: copy and assignment of Monitor
@@ -71,23 +72,28 @@ class Concur {
 
   template <typename F> 
   auto operator()(F f) const -> std::future<decltype(f(t_))> { 
-    auto pro_p = make_shared<std::promise<decltype(f(t_))>>();
-    auto fut = pro_p->get_future();
-    q_.Push(
-        [=]() {
-          try { pro_p->set_value(f(t_)); }
-          catch { pro_p->set_exception(current_exception()); }
-        }
-    ); 
+    using ReturnType = decltype(f(t_));
+    using PromiseType = std::promise<ReturnType>;
+    using FutureType  = std::future<ReturnType>;
+    using ShPtrPrType = std::shared_ptr<PromiseType>;
+    ShPtrPrType pro_p = std::make_shared<PromiseType>();
+    FutureType  fut   = pro_p->get_future();
+    // Until capture rvalue is not implemented we have to have some way to 
+    // ensure the promise is not destroyed before the helper thread
+    // can set the promise
+    q_.Push([=]() {
+        try { SetValue(f, *pro_p); }
+        catch (...) { pro_p->set_exception(std::current_exception()); }
+      });
     return fut;
   }
  private:
   template <typename F, typename Ret>
-  void SetValue(std::promise<Ret>& pro, F& f) {
+  inline void SetValue(F& f, std::promise<Ret> &pro) {
     pro.set_value(f(t_));
   }
   template <typename F>
-  void SetValue(std::promise<void>& pro, F& f) {
+  inline void SetValue(F& f, std::promise<void> &pro) {
     f(t_);
     pro.set_value();
   }
