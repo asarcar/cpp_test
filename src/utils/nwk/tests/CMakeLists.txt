@@ -1,4 +1,4 @@
-# Copyright 2014 asarcar Inc.
+# Copyright 2015 asarcar Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,13 +13,5 @@
 # limitations under the License.
 
 # Author: Arijit Sarcar <sarcar_a@yahoo.com>
-
-######################################
-#           SubDirectories           #
-######################################
-add_subdirectory(basic)
-add_subdirectory(concur)
-add_subdirectory(ds)
-add_subdirectory(math)
-add_subdirectory(misc)
-add_subdirectory(nwk)
+add_ctest_fn(ipv4 nwk_utils)
+add_ctest_fn(ipv4_prefix nwk_utils)

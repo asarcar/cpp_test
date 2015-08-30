@@ -1,4 +1,4 @@
-# Copyright 2014 asarcar Inc.
+# Copyright 2015 asarcar Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,12 +14,12 @@
 
 # Author: Arijit Sarcar <sarcar_a@yahoo.com>
 
+add_library(nwk_utils ipv4.cc ipv4_prefix.cc)
+target_link_libraries(nwk_utils basic_utils)
+
 ######################################
 #           SubDirectories           #
 ######################################
-add_subdirectory(basic)
-add_subdirectory(concur)
-add_subdirectory(ds)
-add_subdirectory(math)
-add_subdirectory(misc)
-add_subdirectory(nwk)
+if (CMAKE_CUSTOM_UNIT_TESTS)
+  add_subdirectory(tests)
+endif (CMAKE_CUSTOM_UNIT_TESTS)
