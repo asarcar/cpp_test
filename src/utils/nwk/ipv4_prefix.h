@@ -50,7 +50,7 @@ class IPv4Prefix {
 
   // Destructor and other ctors and = on both lvalue and rvalue reference
 
-  int Length(void) { return len_; }
+  inline int size(void) { return len_; }
 
   inline std::string to_string(void) { 
     return ip_.to_string() + "/" + std::to_string(len_);
@@ -58,11 +58,7 @@ class IPv4Prefix {
 
   // Substr operator returns an equivalent IPv4 Prefix address but only 
   // with bits in the [begin, begin + len) range.
-  IPv4Prefix Substr(int begin, int runlen) const;
-
-  // Concatenates the bit strings of IPv4 address in the class to the
-  // one passed in argument
-  IPv4Prefix Join(const IPv4Prefix& other);
+  IPv4Prefix substr(int begin, int runlen) const;
 
   // Equality Check Operators
   inline bool operator ==(const IPv4Prefix& other) const {
@@ -72,11 +68,23 @@ class IPv4Prefix {
     return !operator==(other);
   }
 
+  // Concatenates the bit strings of IPv4 address in the class to the
+  // one passed in argument
+  IPv4Prefix& operator +=(const IPv4Prefix& other);
+
+  // Concatenates the bit strings of host prefix class to the
+  // one passed in argument and creates a new prefix string
+  inline IPv4Prefix operator +(const IPv4Prefix& other) {
+    return IPv4Prefix{*this}.operator+=(other);
+  }
 
  private:
   IPv4  ip_;
   int   len_;
 };
+
+
+
 //-----------------------------------------------------------------------------
 } } } // namespace asarcar { namespace utils { namespace nwk {
 

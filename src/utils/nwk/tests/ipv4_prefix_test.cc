@@ -42,9 +42,10 @@ class IPv4PrefixTest {
 void IPv4PrefixTest::Test() {
   IPv4Prefix pref{"127.1.2.3", 16};
   
-  CHECK(pref.Length() == 16);
-  CHECK((pref.Substr(8, 8) == IPv4Prefix{"1.2.3.4", 8}));
-  CHECK(pref.Substr(0,8).Join(pref.Substr(8,8)) == pref);
+  CHECK(pref.size() == 16);
+  CHECK((pref.substr(8, 8) == IPv4Prefix{"1.2.3.4", 8}));
+  CHECK((pref.substr(0,8) + pref.substr(8,8)) == pref);
+  CHECK((pref.substr(0,4) += pref.substr(4,12)) == pref);
 }
 
 int main(int argc, char *argv[]) {

@@ -51,10 +51,10 @@ void IPv4Test::Test() {
 
   CHECK_EQ(a.to_string(), c.to_string());
 
-  CHECK(a.IsSame(string(s)));
-  CHECK(a.IsSame(string(s), "255.255.255.192"));
-  CHECK(a.IsSame(string(s), "255.255.224.0"));
-  CHECK(a.IsSame(string(s), "192.0.0.0"));
+  CHECK(a.SameSubnet(string(s)));
+  CHECK(a.SameSubnet(string(s), "255.255.255.192"));
+  CHECK(a.SameSubnet(string(s), "255.255.224.0"));
+  CHECK(a.SameSubnet(string(s), "192.0.0.0"));
 }
 
 int main(int argc, char *argv[]) {

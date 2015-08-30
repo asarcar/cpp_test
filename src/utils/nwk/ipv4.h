@@ -66,8 +66,8 @@ class IPv4 {
 
   // Returns true if subnet of the passed str_addr matches the subnet
   // of the v4 address given the netmask passed 
-  bool IsSame(const std::string& str, 
-              const std::string& mask = "255.255.255.255") const;
+  bool SameSubnet(const std::string& str, 
+                  const std::string& mask = "255.255.255.255") const;
 
  private:
   uint32_t addr_; // stored in host endian order

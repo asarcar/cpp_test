@@ -25,7 +25,7 @@ using namespace std;
 namespace asarcar { namespace utils { namespace nwk {
 //-----------------------------------------------------------------------------
 
-IPv4Prefix IPv4Prefix::Substr(int begin, int runlen) const {
+IPv4Prefix IPv4Prefix::substr(int begin, int runlen) const {
   DCHECK(begin >= 0);
   DCHECK((runlen > 0) && ((begin + runlen) <= len_));
   uint32_t addr = ip_.to_scalar();
@@ -34,13 +34,14 @@ IPv4Prefix IPv4Prefix::Substr(int begin, int runlen) const {
   return IPv4Prefix{new_addr, runlen};
 }
 
-IPv4Prefix IPv4Prefix::Join(const IPv4Prefix& other) {
+IPv4Prefix& IPv4Prefix::operator +=(const IPv4Prefix& other) {
   DCHECK((len_ + other.len_) <= IPv4::MAX_LEN);
-  uint32_t addr  = ip_.to_scalar();
-  uint32_t addr2 = other.ip_.to_scalar();
-  uint32_t new_addr = addr | (addr2 >> len_);
-  int      new_len  = len_ + other.len_;
-  return IPv4Prefix{new_addr, new_len};
+  uint32_t addr1  = ip_.to_scalar();
+  uint32_t addr2  = other.ip_.to_scalar();
+  ip_             = IPv4{addr1 | (addr2 >> len_)};
+  len_           += other.len_;
+
+  return *this;
 }
 
 //-----------------------------------------------------------------------------

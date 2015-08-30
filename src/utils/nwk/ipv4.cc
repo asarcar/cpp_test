@@ -39,8 +39,8 @@ std::string IPv4::to_string(void) const {
   return inet_ntoa(inaddr);
 }
 
-bool IPv4::IsSame(const std::string& str,
-                  const std::string& mask) const {
+bool IPv4::SameSubnet(const std::string& str,
+                      const std::string& mask) const {
   IPv4 ip{str};
   IPv4 netmask{mask};
 
