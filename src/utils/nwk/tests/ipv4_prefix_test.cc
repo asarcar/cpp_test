@@ -46,6 +46,13 @@ void IPv4PrefixTest::Test() {
   CHECK((pref.substr(8, 8) == IPv4Prefix{"1.2.3.4", 8}));
   CHECK((pref.substr(0,8) + pref.substr(8,8)) == pref);
   CHECK((pref.substr(0,4) += pref.substr(4,12)) == pref);
+
+  CHECK(!pref[0]);
+  CHECK(pref[15]);
+
+  CHECK((pref.prefix(IPv4Prefix{"127.1.3.4", 16}) == pref));
+  CHECK((pref.prefix(IPv4Prefix{"127.1.3.4", 17}) == pref));
+  CHECK((pref.prefix(IPv4Prefix{"127.1.3.4", 15}) == IPv4Prefix{"127.0.0.0", 15}));
 }
 
 int main(int argc, char *argv[]) {

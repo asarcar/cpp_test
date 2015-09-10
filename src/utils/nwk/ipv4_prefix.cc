@@ -44,6 +44,20 @@ IPv4Prefix& IPv4Prefix::operator +=(const IPv4Prefix& other) {
   return *this;
 }
 
+IPv4Prefix IPv4Prefix::prefix(const IPv4Prefix& other) const {
+  uint32_t addr1  = ip_.to_scalar();
+  uint32_t addr2  = other.ip_.to_scalar();
+  uint32_t mask   = 0x80000000;
+  for (int len=0; len<len_; ++len) {
+    if (len == other.len_)
+      return other;
+    if ((addr1 & mask) != (addr2 & mask))
+      return IPv4Prefix{addr1, len};
+    mask >>= 1;
+  }
+  return *this;
+}
+
 //-----------------------------------------------------------------------------
 } } } // namespace asarcar { namespace utils { namespace nwk {
 

@@ -13,5 +13,6 @@
 # limitations under the License.
 
 # Author: Arijit Sarcar <sarcar_a@yahoo.com>
+add_ctest_fn(radix_trie nwk_utils)
 add_ctest_fn(skip_lists)
 add_ctest_fn(treap)

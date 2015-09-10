@@ -55,6 +55,10 @@ void IPv4Test::Test() {
   CHECK(a.SameSubnet(string(s), "255.255.255.192"));
   CHECK(a.SameSubnet(string(s), "255.255.224.0"));
   CHECK(a.SameSubnet(string(s), "192.0.0.0"));
+
+  CHECK(a[15]);
+  CHECK(b[1]);
+  CHECK(c[30]);
 }
 
 int main(int argc, char *argv[]) {

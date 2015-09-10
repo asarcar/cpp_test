@@ -42,7 +42,7 @@ class IPv4Prefix {
 
  public:
   IPv4Prefix(uint32_t addr=0, int len=0) : ip_{addr & Mask(len)}, len_{len} {
-    DCHECK(len_ <= IPv4::MAX_LEN);
+    DCHECK(len_ >= 0 && len_ <= IPv4::MAX_LEN);
   }
   IPv4Prefix(IPv4 ip, int len = 0): IPv4Prefix{ip.to_scalar(), len} {}
   IPv4Prefix(const char* s, int len) : IPv4Prefix{IPv4{s}, len} {}
@@ -50,10 +50,13 @@ class IPv4Prefix {
 
   // Destructor and other ctors and = on both lvalue and rvalue reference
 
-  inline int size(void) { return len_; }
+  inline size_t size(void) const { return len_; }
 
-  inline std::string to_string(void) { 
-    return ip_.to_string() + "/" + std::to_string(len_);
+  // We only support resizing to smaller values
+  inline void resize(int len) { 
+    DCHECK(len <= len_);
+    ip_.resize(ip_.to_scalar() & Mask(len));
+    len_ = len;
   }
 
   // Substr operator returns an equivalent IPv4 Prefix address but only 
@@ -68,14 +71,27 @@ class IPv4Prefix {
     return !operator==(other);
   }
 
+  // True when 'n'th (0 < n < prefix length) most significant bit is 1
+  inline bool operator [](int n) const {
+    DCHECK(n >= 0 && n < len_);
+    return ip_[n];
+  }
+
   // Concatenates the bit strings of IPv4 address in the class to the
   // one passed in argument
   IPv4Prefix& operator +=(const IPv4Prefix& other);
 
   // Concatenates the bit strings of host prefix class to the
   // one passed in argument and creates a new prefix string
-  inline IPv4Prefix operator +(const IPv4Prefix& other) {
+  inline IPv4Prefix operator +(const IPv4Prefix& other) const {
     return IPv4Prefix{*this}.operator+=(other);
+  }
+
+  // Returns the common prefix substring as compared to argument
+  IPv4Prefix prefix(const IPv4Prefix& other) const;
+
+  inline std::string to_string(void) const { 
+    return ip_.to_string() + "/" + std::to_string(len_);
   }
 
  private:
@@ -83,8 +99,10 @@ class IPv4Prefix {
   int   len_;
 };
 
-
-
+inline std::ostream& operator << (std::ostream& os, const IPv4Prefix& pref) {
+  os << pref.to_string(); 
+  return os;
+}
 //-----------------------------------------------------------------------------
 } } } // namespace asarcar { namespace utils { namespace nwk {
 

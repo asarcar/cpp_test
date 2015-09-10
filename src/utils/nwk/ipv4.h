@@ -45,12 +45,24 @@ class IPv4 {
   explicit IPv4(std::string str) : IPv4{str.c_str()} {}
   // Destructor and other ctors and = on both lvalue and rvalue reference
   
+  // reduce the effective number of non-zero symbols in the IP address
+  inline void resize(uint32_t addr) { 
+    DCHECK(((addr_ | addr) == addr) && ((addr_ & addr) == addr_));
+    addr_ = addr;
+  }
+
   // Equality Check Operators
   inline bool operator ==(const IPv4& other) const {
     return (to_scalar() == other.to_scalar());
   }
   inline bool operator !=(const IPv4& other) const {
     return !operator==(other);
+  }
+
+  // True when 'n'th (0 < n < MAX_LEN) most significant bit is 1
+  inline bool operator [](int n) const {
+    DCHECK(n >= 0 && n < MAX_LEN);
+    return ( (addr_ & (0x80000000 >> n)) != 0);
   }
 
   // LoopBack Interface
@@ -61,17 +73,22 @@ class IPv4 {
   // cast operator to uint32_t
   inline uint32_t to_scalar(void) const { return addr_; }
 
-  // cast operator to string
-  std::string to_string(void) const;
-
   // Returns true if subnet of the passed str_addr matches the subnet
   // of the v4 address given the netmask passed 
   bool SameSubnet(const std::string& str, 
                   const std::string& mask = "255.255.255.255") const;
 
+  // cast operator to string
+  std::string to_string(void) const;
+
  private:
   uint32_t addr_; // stored in host endian order
 };
+
+inline std::ostream& operator << (std::ostream& os, const IPv4& ipv4) { 
+  os << ipv4.to_string(); 
+  return os;
+}
 //-----------------------------------------------------------------------------
 } } } // namespace asarcar { namespace utils { namespace nwk {
 
