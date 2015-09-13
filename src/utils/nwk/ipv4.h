@@ -47,7 +47,7 @@ class IPv4 {
   
   // reduce the effective number of non-zero symbols in the IP address
   inline void resize(uint32_t addr) { 
-    DCHECK(((addr_ | addr) == addr) && ((addr_ & addr) == addr_));
+    DCHECK(((addr_ | addr) == addr_) && ((addr_ & addr) == addr));
     addr_ = addr;
   }
 

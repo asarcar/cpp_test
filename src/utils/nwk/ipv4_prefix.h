@@ -36,8 +36,9 @@ namespace asarcar { namespace utils { namespace nwk {
 //-----------------------------------------------------------------------------
 class IPv4Prefix {
  private:
-  static uint32_t Mask(int runlen) {
-    return (((1 << runlen) - 1) << (IPv4::MAX_LEN - runlen));
+  static inline uint32_t Mask(int runlen) {
+    DCHECK(runlen <= IPv4::MAX_LEN);
+    return 0xFFFFFFFF << (IPv4::MAX_LEN - runlen);
   }
 
  public:
