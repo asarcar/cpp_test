@@ -27,9 +27,9 @@ namespace asarcar { namespace utils { namespace nwk {
 
 IPv4Prefix IPv4Prefix::substr(int begin, int runlen) const {
   DCHECK(begin >= 0);
-  DCHECK((runlen > 0) && ((begin + runlen) <= len_));
+  DCHECK((runlen >= 0) && ((begin + runlen) <= len_));
   uint32_t addr = ip_.to_scalar();
-  uint32_t new_mask = Mask(runlen);
+  uint32_t new_mask = GetMask(runlen);
   uint32_t new_addr = (addr << begin) & new_mask;
   return IPv4Prefix{new_addr, runlen};
 }
@@ -38,9 +38,8 @@ IPv4Prefix& IPv4Prefix::operator +=(const IPv4Prefix& other) {
   DCHECK((len_ + other.len_) <= IPv4::MAX_LEN);
   uint32_t addr1  = ip_.to_scalar();
   uint32_t addr2  = other.ip_.to_scalar();
-  ip_             = IPv4{addr1 | (addr2 >> len_)};
-  len_           += other.len_;
-
+  ip_= IPv4{addr1 | (addr2 >> len_)};
+  len_ += other.len_;
   return *this;
 }
 

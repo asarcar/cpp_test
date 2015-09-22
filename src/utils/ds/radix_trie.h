@@ -79,11 +79,17 @@ class RadixTrie {
     static constexpr size_t NUM_CHILDREN= 2; 
     static constexpr size_t LEFT_CHILD  = 0; 
     static constexpr size_t RIGHT_CHILD = 1; 
-    Node(Key&& k, 
-         KeyValueUPtr&& kv = nullptr, 
+    // Intentionally we pass input param by value.
+    // Users are encouraged to pass rvalue for efficiency 
+    // and support copy construction with move semantics.
+    // Pass-by-value is optimal since we know for sure we are going to 
+    // copy the argument. 
+    // Beware as otherwise, we add a copy overhead if param is lvalue.
+    Node(Key k, 
+         KeyValueUPtr kv = nullptr, 
          NodePtr par_p = nullptr, 
-         NodeUPtr&& lchild_p = nullptr,
-         NodeUPtr&& rchild_p = nullptr); 
+         NodeUPtr lchild_p = nullptr,
+         NodeUPtr rchild_p = nullptr); 
     Key           key; // key substring represented by this node
     KeyValueUPtr  keyvalue_p; // nullptr when node doesn't have associated value
     NodePtr       parent_p; // naked pointer
@@ -113,12 +119,28 @@ class RadixTrie {
   Iterator Find(const Key& key) const; 
   Iterator LongestPrefixMatch(const Key& key) const;
 
-  InsertRetType Insert(KeyValue&& kv);
+  // Intentionally we pass input param by value.
+  // Users are encouraged to pass rvalue for efficiency
+  // and support copy construction with move semantics.
+  // Pass-by-value is optimal since we know for sure we are going to 
+  // copy the argument. 
+  // Beware as otherwise, we add a copy overhead if param is lvalue.
+  InsertRetType Insert(KeyValue kv);
   Iterator Erase(Iterator it);
 
-  // Avoid this operator for first insert - wastes time default constructing
+  // Avoid: operator for first insert - wastes time default constructing
   // Value only to override it later.
-  Value& operator[] (const Key& key);
+  //
+  // Intentionally we pass input param by value.
+  // Users are encouraged to pass rvalue for efficiency
+  // and support copy construction with move semantics.
+  // Pass-by-value is optimal since we know for sure we are going to 
+  // copy the argument. 
+  // Beware as otherwise, we add a copy overhead if param is lvalue.
+  inline Value& operator[] (Key key) {
+    InsertRetType ret = Insert({std::move(key), Value{}});
+    return ret.first->second;
+  }
 
  private:
   NodeUPtr  root_p_;
@@ -139,6 +161,10 @@ class RadixTrie {
                                  size_t* lm_key_len_p = nullptr,
                                  size_t* lp_key_len_p = nullptr) const;
   void SplitNode(NodePtr node_to_split_p, int len, NodePtr sibling_p);
+  InsertRetType SetUpTreeBranch(KeyValue&& kv,
+                                NodePtr    first_mm_node_p, 
+                                int        lm_key_len, 
+                                int        lp_key_len);
 
  public:
   class Iterator {
@@ -182,9 +208,9 @@ class RadixTrie {
 };
 
 template <typename Key, typename Value>
-RadixTrie<Key,Value>::Node::Node(Key&& k, KeyValueUPtr&& kv, 
+RadixTrie<Key,Value>::Node::Node(Key k, KeyValueUPtr kv, 
                                  NodePtr par_p,
-                                 NodeUPtr&& lchild_p, NodeUPtr&& rchild_p) : 
+                                 NodeUPtr lchild_p, NodeUPtr rchild_p) : 
     key{std::move(k)}, keyvalue_p{std::move(kv)}, 
   parent_p{par_p}, 
   children_p{std::move(lchild_p), std::move(rchild_p)} {
@@ -325,13 +351,6 @@ RadixTrie<Key,Value>::Erase(const Iterator it) {
 }
 
 template <typename Key, typename Value>
-Value& 
-RadixTrie<Key,Value>::operator[] (const Key& key) {
-  InsertRetType ret = Insert({key, Value{}});
-  return ret.first->second;
-}
-
-template <typename Key, typename Value>
 typename RadixTrie<Key,Value>::NodePtr
 RadixTrie<Key,Value>::LongestPrefixMatchNode(const Key& key,
                                              const NodePtr root_p,
@@ -432,10 +451,12 @@ void RadixTrie<Key,Value>::SplitNode(NodePtr node_to_split_p,
   DCHECK(node_to_split_p->children_p.at(child_idx) == nullptr);
   node_to_split_p->children_p.at(child_idx).reset(child_p);
 
-  // Link the sibling as the split node's other child
-  size_t sibling_idx = Node::RIGHT_CHILD - child_idx;
-  DCHECK(node_to_split_p->children_p.at(sibling_idx) == nullptr);
-  node_to_split_p->children_p.at(sibling_idx).reset(sibling_p);
+  if (sibling_p != nullptr) {
+    // Link the sibling as the split node's other child
+    size_t sibling_idx = Node::RIGHT_CHILD - child_idx;
+    DCHECK(node_to_split_p->children_p.at(sibling_idx) == nullptr);
+    node_to_split_p->children_p.at(sibling_idx).reset(sibling_p);
+  }
 
   // Reset the length of the key of the current parent node appropriately
   node_to_split_p->key.resize(len);
@@ -443,7 +464,7 @@ void RadixTrie<Key,Value>::SplitNode(NodePtr node_to_split_p,
 
 template <typename Key, typename Value>
 typename RadixTrie<Key,Value>::InsertRetType
-RadixTrie<Key,Value>::Insert(KeyValue&& kv) {
+RadixTrie<Key,Value>::Insert(KeyValue kv) {
   size_t  key_len = kv.first.size();
   NodePtr root_p{root_p_.get()};
   NodePtr first_mm_node_p{nullptr};
@@ -458,12 +479,14 @@ RadixTrie<Key,Value>::Insert(KeyValue&& kv) {
   DCHECK(lp_key_len <= key_len);
 
   // Cases
-  // a. Split Intermediate Node
-  //      First Mismatch Node Found
-  // a.1. Longest Match Node ! Found or Found with shorter key
-  //      Note: Longest Match Node Found with equal key not
-  //      possible as First Mismatch Node is returned as nullptr in that case
-  //
+  // First Mismatch Node Found
+  // a.1 Split Intermediate Node and Create Two Children Branch
+  //      Longest Prefix Key doesn't cover entire key
+  //      Note: First Mismatch Node is null when key match is exact
+  //            
+  // a.2 Split Intermediate Node and Create an One Child Branch
+  //     Longest prefix key covers entire key
+  //     
   // First Mismatch Node ! Found cases from here on.
   // b. New Root Node: 
   //                Longest Match Node ! found.
@@ -473,21 +496,11 @@ RadixTrie<Key,Value>::Insert(KeyValue&& kv) {
   //                Longest Match node found with shorter key.
   // d. Exact match:   
   //                Longest Match Node found with exact key.
-
+  
   // a.
-  if (first_mm_node_p != nullptr) {
-    DCHECK(lm_key_len < lp_key_len);
-    // a.1 or a.2.
-    NodePtr sibling_p = 
-      new Node{kv.first.substr(lp_key_len, (key_len - lp_key_len)), 
-               KeyValueUPtr{new KeyValue{std::move(kv)}}, first_mm_node_p};
-    ++node_size_; ++value_size_;
-
-    SplitNode(first_mm_node_p, lp_key_len - lm_key_len, sibling_p);
-    DCHECK(first_mm_node_p->keyvalue_p == nullptr);
-    DCHECK(sibling_p->keyvalue_p != nullptr);
-    return InsertRetType{Iterator{this, root_p, sibling_p}, true};
-  }
+  if (first_mm_node_p != nullptr)
+    return SetUpTreeBranch(std::move(kv), first_mm_node_p, 
+                           lm_key_len, lp_key_len);
   
   // First mismatch node ! Found cases from here on
   // b. New Root Node
@@ -644,6 +657,45 @@ RadixTrie<Key,Value>::to_string(NodePtr node_p, int depth, bool dump_internal_no
 
   return oss.str() + lchild_str + rchild_str;
 }
+
+// First Mismatch Node Found
+// a.1 One Branch Case
+//     Longest prefix key discovered in the first mismatch is same as key
+//     
+// a.2 Split Intermediate Node
+//      Longest Match Node ! Found or Found with shorter key
+//      Note: Longest Match Node Found with equal key not
+//      possible as First Mismatch Node is returned as nullptr in that case
+template <typename Key, typename Value>
+typename RadixTrie<Key,Value>::InsertRetType
+RadixTrie<Key,Value>::SetUpTreeBranch(
+    KeyValue&& kv,
+    NodePtr    first_mm_node_p, 
+    int        lm_key_len, 
+    int        lp_key_len) {
+  DCHECK_NOTNULL(first_mm_node_p);
+  DCHECK(lp_key_len - lm_key_len < first_mm_node_p->key.size());
+  int key_len = kv.first.size();
+
+  // Case a.1: SplitNode with two Children Branch
+  if (lp_key_len < key_len) {
+    NodePtr sibling_p = 
+        new Node{kv.first.substr(lp_key_len, (kv.first.size() - lp_key_len)), 
+                 KeyValueUPtr{new KeyValue{std::move(kv)}}, first_mm_node_p};
+    ++node_size_; ++value_size_;
+    
+    SplitNode(first_mm_node_p, lp_key_len - lm_key_len, sibling_p);
+    return InsertRetType{Iterator{this, root_p_.get(), sibling_p}, true};
+  }
+
+  // Case a.2 SplitNode with one Child Branch
+  // Case lp_key_len == key_len
+  SplitNode(first_mm_node_p, lp_key_len - lm_key_len, nullptr);
+  first_mm_node_p->keyvalue_p.reset(new KeyValue{std::move(kv)});
+  ++value_size_;
+  return InsertRetType{Iterator{this, root_p_.get(), first_mm_node_p}, true};
+}
+
 
 template <typename Key, typename Value>
 std::ostream& operator << (std::ostream& os, 

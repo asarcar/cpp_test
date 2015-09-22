@@ -16,12 +16,14 @@
 
 // Standard C++ Headers
 // Standard C Headers
+#include <climits>                  // CHAR_BIT
 // Google Headers
 #include <glog/logging.h>   
 // Local Headers
 #include "utils/basic/basictypes.h"
 #include "utils/basic/init.h"
 #include "utils/ds/radix_trie.h"
+#include "utils/ds/string_prefix.h"
 #include "utils/nwk/ipv4_prefix.h"
 
 using namespace asarcar;
@@ -36,16 +38,16 @@ DECLARE_bool(auto_test);
 class RadixTrieTester {
  public:
   using ItPrefix = typename RadixTrie<IPv4Prefix,string>::Iterator;
-  using ItString = typename RadixTrie<string,string>::Iterator;
+  using ItString = typename RadixTrie<StringPrefix,string>::Iterator;
 
   void RouteTest(void);
   void StringTest(void);
 
  private:
   RadixTrie<IPv4Prefix, string> rtpref_;
-  RadixTrie<string, string>     rtstr_;
+  RadixTrie<StringPrefix, string>     rtstr_;
 
-  void AddRoute(const char* pref, int len, const char* value) {
+  void AddRoute(const char pref[], int len, const char value[]) {
     IPv4Prefix rt{pref, len};
     rtpref_[rt] = value;
   }
@@ -80,8 +82,8 @@ class RadixTrieTester {
 };
 
 void RadixTrieTester::RouteTest(void) {
-  AddRoute("0.0.0.0",      0, "10.7.22.1");
   AddRoute("10.0.0.0",     8, "10.7.22.2");
+  AddRoute("0.0.0.0",      0, "10.7.22.1");
   AddRoute("172.16.0.0",  16, "10.7.22.3");  
   AddRoute("172.17.0.0",  16, "10.7.22.4");
   AddRoute("172.18.0.0",  16, "10.7.22.5");
@@ -130,7 +132,27 @@ void RadixTrieTester::RouteTest(void) {
 }
               
 void RadixTrieTester::StringTest(void) {
+  // Add
+  rtstr_["Biswanath Dadu"] = "01-01-01";
+
+  rtstr_[""]                = "00-00-00";
+
+  rtstr_["Alpana Amma"]     = "02-02-02";
+
+  rtstr_["Arijit Baba"]     = "03-03-03";
+  rtstr_["Dipannita Ma"]    = "04-04-04";
+  rtstr_["Abhineet Dada"]   = "05-05-05";
+
+  rtstr_["Aditya Me"]       = "06-06-06";
+  rtstr_["Arijit Baba Name"] = "07-07-07";
+  rtstr_["Arijit"]          = "08-08-08";
   DLOG(INFO) << "String Radix Trie: " << rtstr_;
+
+  // Longest Match
+  ItString it = rtstr_.LongestPrefixMatch("Arijit B");
+  string lpstr = ((it != rtstr_.End()) ? 
+      ("<"+it->first.to_string()+","+it->second+">"):"not found");
+  DLOG(INFO) << "Longest Prefix Match \"Arijit B\"=" << lpstr;
 }
 
 int main(int argc, char **argv) {

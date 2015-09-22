@@ -17,8 +17,8 @@
 ######################################
 #           SubDirectories           #
 ######################################
-# add_library(ds_utils skip_lists.cc)
-# target_link_libraries(ds_utils basic_utils)
+add_library(ds_utils string_prefix.cc)
+target_link_libraries(ds_utils basic_utils)
 
 if (CMAKE_CUSTOM_UNIT_TESTS)
   add_subdirectory(tests)

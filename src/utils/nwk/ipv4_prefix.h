@@ -35,20 +35,13 @@
 namespace asarcar { namespace utils { namespace nwk {
 //-----------------------------------------------------------------------------
 class IPv4Prefix {
- private:
-  static inline uint32_t Mask(int runlen) {
-    DCHECK(runlen <= IPv4::MAX_LEN);
-    return 0xFFFFFFFF << (IPv4::MAX_LEN - runlen);
-  }
-
  public:
-  IPv4Prefix(uint32_t addr=0, int len=0) : ip_{addr & Mask(len)}, len_{len} {
+  IPv4Prefix(uint32_t addr=0, int len=0) :ip_{addr & GetMask(len)},len_{len} {
     DCHECK(len_ >= 0 && len_ <= IPv4::MAX_LEN);
   }
   IPv4Prefix(IPv4 ip, int len = 0): IPv4Prefix{ip.to_scalar(), len} {}
   IPv4Prefix(const char* s, int len) : IPv4Prefix{IPv4{s}, len} {}
   IPv4Prefix(std::string str, int len) : IPv4Prefix{IPv4{str}, len} {}
-
   // Destructor and other ctors and = on both lvalue and rvalue reference
 
   inline size_t size(void) const { return len_; }
@@ -56,7 +49,7 @@ class IPv4Prefix {
   // We only support resizing to smaller values
   inline void resize(int len) { 
     DCHECK(len <= len_);
-    ip_.resize(ip_.to_scalar() & Mask(len));
+    ip_.resize(ip_.to_scalar() & GetMask(len));
     len_ = len;
   }
 
@@ -74,13 +67,9 @@ class IPv4Prefix {
 
   // True when 'n'th (0 < n < prefix length) most significant bit is 1
   inline bool operator [](int n) const {
-    DCHECK(n >= 0 && n < len_);
+    DCHECK_GE(n, 0); DCHECK_LT(n, len_);
     return ip_[n];
   }
-
-  // Concatenates the bit strings of IPv4 address in the class to the
-  // one passed in argument
-  IPv4Prefix& operator +=(const IPv4Prefix& other);
 
   // Concatenates the bit strings of host prefix class to the
   // one passed in argument and creates a new prefix string
@@ -88,16 +77,23 @@ class IPv4Prefix {
     return IPv4Prefix{*this}.operator+=(other);
   }
 
+  // Concatenates other to this and returns this
+  IPv4Prefix& operator +=(const IPv4Prefix& other);
+
   // Returns the common prefix substring as compared to argument
   IPv4Prefix prefix(const IPv4Prefix& other) const;
 
-  inline std::string to_string(void) const { 
+  inline std::string to_string(bool debug=false) const { 
     return ip_.to_string() + "/" + std::to_string(len_);
   }
 
  private:
   IPv4  ip_;
   int   len_;
+  static inline uint32_t GetMask(int runlen) {
+    DCHECK(runlen <= IPv4::MAX_LEN);
+    return 0xFFFFFFFF << (IPv4::MAX_LEN - runlen);
+  }
 };
 
 inline std::ostream& operator << (std::ostream& os, const IPv4Prefix& pref) {
