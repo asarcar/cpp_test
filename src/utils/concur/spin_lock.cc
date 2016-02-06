@@ -58,6 +58,13 @@ bool SpinLock::TryLock(LockMode mode) {
 void SpinLock::lock(LockMode mode) {
   int num_iter;
 
+  // TODO: Modify the loop such that after 1000 tries we "devolve" to
+  // a wait lock on signal. When many threads wait on the same lock
+  // the performance quickly deteoriates due to "lock swarming" - 
+  // cache snoop protocols wastes a lot of time. In such, conditions
+  // better to back off to wait based signaling.
+  // Change to wait based signal semaphore requires us to use
+  // OS dependent (Linux constructs). Hence postponing that code.
   for (num_iter=0; !TryLock(mode); ++num_iter) {
     // For busy waiting: Use 'pause' instruction to prevent speculative 
     // execution.
