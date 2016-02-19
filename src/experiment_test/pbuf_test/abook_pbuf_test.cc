@@ -24,7 +24,7 @@
 // Google Headers
 #include <glog/logging.h>   
 // Local Headers
-#include "experiment_test/pbuf_test/address_book.pb.h"
+#include "experiment_test/pbuf_test/protos/address_book.pb.h"
 #include "utils/basic/basictypes.h"
 #include "utils/basic/fassert.h"
 #include "utils/basic/init.h"

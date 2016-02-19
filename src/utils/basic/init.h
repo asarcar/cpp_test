@@ -38,6 +38,7 @@ class Init {
  public:
   Init() = delete;
   static void InitEnv(int *argc_p, char **argv_p[]);
+  static std::string GetEnvStr(const char *env_name);
  protected:
  private:
 };

@@ -13,10 +13,4 @@
 # limitations under the License.
 
 # Author: Arijit Sarcar <sarcar_a@yahoo.com>
-# pbuf_gen_cpp_fn(pbuf_src_files protos/address_book.proto)
-# add_pbuf_ctest_fn("${pbuf_src_files}" abook_pbuf)
-
-# Add all the protobuf files to the proto_files list variable 
-add_pb_ctest_fn(abook_pbuf "" "protos/address_book.proto")
-
-
+add_grpc_pb_ctest_fn(rg_sync  "../db/db_read_json.cc" "../protos/route_guide.proto")

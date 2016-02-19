@@ -33,15 +33,6 @@ DECLARE_string(log_dir);
 
 namespace asarcar { 
 
-std::string getenvstr(const char* str)
-{
-  const char *env = getenv(str);
-  if (env == nullptr) 
-    return std::string("\"\"");
-
-  return std::string("\"") + std::string(env) + std::string("\"");
-}
-
 void Init::InitEnv(int *argc_p, char **argv_p[]) {
   FASSERT(argc_p != nullptr);
   FASSERT(argv_p != nullptr);
@@ -64,13 +55,22 @@ void Init::InitEnv(int *argc_p, char **argv_p[]) {
              << ": logtostderr="<< std::boolalpha << "\"" 
              << FLAGS_logtostderr << "\""
              << ": log_dir=" << "\"" << FLAGS_log_dir << "\""
-             << ": HEAPCHECK=" << getenvstr("HEAPCHECK")
+             << ": HEAPCHECK=" << "\"" << GetEnvStr("HEAPCHECK") << "\""
              << ": HEAPCHECK_DUMP_DIRECTORY=" 
-             << getenvstr("HEAPCHECK_DUMP_DIRECTORY")
-             << ": HEAPPROFILE=" << getenvstr("HEAPPROFILE")
-             << ": CPUPROFILE=" << getenvstr("CPUPROFILE");
+             << "\"" << GetEnvStr("HEAPCHECK_DUMP_DIRECTORY") << "\""
+             << ": HEAPPROFILE=" << "\"" << GetEnvStr("HEAPPROFILE") << "\""
+             << ": CPUPROFILE=" << "\"" << GetEnvStr("CPUPROFILE") << "\"";
 
   return;
+}
+
+std::string Init::GetEnvStr(const char* str)
+{
+  const char *env = getenv(str);
+  if (env == nullptr) 
+    return std::string("");
+
+  return std::string(env);
 }
 
 } // namespace asarcar

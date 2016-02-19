@@ -166,6 +166,10 @@ include_directories(${CMAKE_BUILD_DIR})
 find_package(ZeroMQ REQUIRED)
 include_directories(${ZeroMQ_INCLUDE_DIR})
 
+# GRPC
+# Get full path to plugin
+find_program(GRPC_CPP_PLUGIN_PATH grpc_cpp_plugin)
+
 #######################################
 # Enable Dashboard Scripting or CTest #
 #######################################
@@ -225,27 +229,30 @@ function(register_test test_name)
 
 endfunction(register_test)
 
-function(add_test_fn test_name)
+function(add_test_helper_fn test_name ctest_flag args)
   set(tmpname ${test_name}_test)
   add_executable(${tmpname} ${tmpname}.cc)
   target_link_libraries(${tmpname} basic_utils)
   # All optional arguments are libraries 
-  foreach(optional_arg ${ARGN})
+  foreach(optional_arg ${args})
     target_link_libraries(${tmpname} ${optional_arg})
   endforeach(optional_arg)
-  set_target_properties(${tmpname} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BIN_DIR})
-  set_target_properties(${tmpname} PROPERTIES OUTPUT_NAME ${tmpname}${BUILD_POSTFIX})
+  if(ctest_flag)
+    register_test(${tmpname})
+  else(ctest_flag)
+    set_target_properties(${tmpname} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BIN_DIR})
+    set_target_properties(${tmpname} PROPERTIES OUTPUT_NAME ${tmpname}${BUILD_POSTFIX})
+  endif(ctest_flag)
+endfunction(add_test_helper_fn)
+
+function(add_test_fn test_name)
+  set(args ${ARGN})
+  add_test_helper_fn("${test_name}" false "${args}")
 endfunction(add_test_fn)
 
 function(add_ctest_fn test_name)
-  set(tmpname ${test_name}_test)
-  add_executable(${tmpname} ${tmpname}.cc)
-  target_link_libraries(${tmpname} basic_utils)
-  # All optional arguments are libraries 
-  foreach(optional_arg ${ARGN})
-    target_link_libraries(${tmpname} ${optional_arg})
-  endforeach(optional_arg)
-  register_test(${tmpname})
+  set(args ${ARGN})
+  add_test_helper_fn("${test_name}" true "${args}")
 endfunction(add_ctest_fn)
 
 # protobuf_generate_cpp() provided by CMAKE 
@@ -253,13 +260,13 @@ endfunction(add_ctest_fn)
 # 2) Is such that sets GENERATED flags true for PROTO_SRC and PROTO_HEADER.
 # 3) Requires add_executable/library() calls within the same directory.
 # Below is a custom function to work around these limitations.
-
-function(pbuf_gen_cpp_fn pbuf_src_files)
+# grpc_gen_flag is true when generating grpc.pb, false when generating .pb files
+function(grpc_pbuf_gen_cpp_fn grpc_gen_flag pbuf_src_files)
   if(NOT ARGN)
-    message(FATAL_ERROR "pbuf_gen_cpp_fn called without any proto files")
+    message(FATAL_ERROR "grpc_pbuf_gen_cpp_fn called without any proto files")
     return()
   endif(NOT ARGN)
-
+  
   # --proto_path arguments to protoc includes all files referred
   # from project source directory and implicit in 
   # PROTOBUF_INCLUDE_DIR - The include directory for protocol buffers
@@ -272,37 +279,94 @@ function(pbuf_gen_cpp_fn pbuf_src_files)
   foreach(pbuf_file ${ARGN})
     # ABSOLUTE  = Full path to file
     get_filename_component(pbuf_abs_path ${pbuf_file} ABSOLUTE)
+    file(RELATIVE_PATH pbuf_rel_fname ${CMAKE_SOURCE_DIR} ${pbuf_abs_path})
+    # DIRECTORY = directory name without filename
+    get_filename_component(pbuf_dir ${pbuf_rel_fname} DIRECTORY)
     # NAME_WE = File name without directory or longest extension
-    get_filename_component(pbuf_base ${pbuf_file} NAME_WE)
+    get_filename_component(pbuf_base ${pbuf_rel_fname} NAME_WE)
+    set(pbuf_ext "${pbuf_dir}/${pbuf_base}")
+    set(protoc_args ${pbuf_proto_args})
+    set(comment_str "protobuf compiler on ${pbuf_file}")
+    if(grpc_gen_flag)
+      set(pbuf_ext "${pbuf_ext}.grpc.pb")
+      list(APPEND protoc_args "--grpc_out=${CMAKE_BUILD_DIR}")
+      list(APPEND protoc_args "--plugin=protoc-gen-grpc=${GRPC_CPP_PLUGIN_PATH}")
+      set(comment_str "Running gRPC C++ protoc: ${comment_str}") 
+    else(grpc_gen_flag)
+      set(pbuf_ext "${pbuf_ext}.pb")
+      list(APPEND protoc_args "--cpp_out=${CMAKE_BUILD_DIR}")
+      set(comment_str "Running C++ protoc: ${comment_str}") 
+    endif(grpc_gen_flag)
     set(pbuf_srcs
-        "${CMAKE_CURRENT_BINARY_DIR}/${pbuf_base}.pb.h"
-        "${CMAKE_CURRENT_BINARY_DIR}/${pbuf_base}.pb.cc")
+        "${CMAKE_BUILD_DIR}/${pbuf_ext}.h"
+        "${CMAKE_BUILD_DIR}/${pbuf_ext}.cc")
     list(APPEND pbuf_src_files ${pbuf_srcs})
+    
     # PROTOBUF_PROTOC_EXECUTABLE - The protoc compiler
     add_custom_command(
       OUTPUT ${pbuf_srcs}
       COMMAND ${PROTOBUF_PROTOC_EXECUTABLE}
-      ARGS ${pbuf_proto_args} --cpp_out=${CMAKE_BUILD_DIR}  ${pbuf_abs_path}
+      ARGS ${protoc_args} ${pbuf_abs_path}
       DEPENDS ${pbuf_abs_path}
-      COMMENT "Running protoc on ${pbuf_file}"
+      COMMENT "${comment_str}"
       VERBATIM
     )
   endforeach(pbuf_file)
   set_source_files_properties(${pbuf_src_files} PROPERTIES GENERATED TRUE)
   set(pbuf_src_files ${pbuf_src_files} PARENT_SCOPE)
-endfunction(pbuf_gen_cpp_fn)
+endfunction(grpc_pbuf_gen_cpp_fn)
 
-function(add_pbuf_ctest_fn pbuf_src_files test_name)
+function(add_grpc_pb_test_helper_fn ctest_flag grpc_flag test_name app_files pbuf_srcs args)
+  # message("ctest_flag ${ctest_flag}: grpc_flag ${grpc_flag}: test_name ${test_name}")
+  # message("app_files ${app_files}: pbuf_srcs ${pbuf_srcs}: args ${args}")
+
+  set(grpc_pbuf_src_files)
+  # Generate the .grpc.pb.[cc|h] files 
+  if(grpc_flag)
+    grpc_pbuf_gen_cpp_fn(true pbuf_src_files ${pbuf_srcs})
+    set(grpc_pbuf_src_files ${pbuf_src_files})
+  endif(grpc_flag)
+  # Generate the pb.[cc|h] files 
+  grpc_pbuf_gen_cpp_fn(false pbuf_src_files ${pbuf_srcs})
   set(tmpname ${test_name}_test)
-  message("pbuf_src_files is ${pbuf_src_files}")
-  add_executable(${tmpname} ${tmpname}.cc ${pbuf_src_files})
-  target_link_libraries(${tmpname} basic_utils ${PROTOBUF_LIBRARIES})
+  add_executable(${tmpname} ${tmpname}.cc ${app_files} ${grpc_pbuf_src_files} ${pbuf_src_files})
+  target_link_libraries(${tmpname} basic_utils)
+  target_link_libraries(${tmpname} ${PROTOBUF_LIBRARIES})
+  if(grpc_flag)
+    target_link_libraries(${tmpname} grpc++_unsecure grpc gpr) 
+    target_link_libraries(${tmpname} dl) 
+  endif(grpc_flag)
   # All optional arguments are libraries 
-  foreach(optional_arg ${ARGN})
+  foreach(optional_arg ${args})
     target_link_libraries(${tmpname} ${optional_arg})
   endforeach(optional_arg)
-  register_test(${tmpname})
-endfunction(add_pbuf_ctest_fn)
+  if(ctest_flag)
+    register_test(${tmpname})
+  else(ctest_flag)
+    set_target_properties(${tmpname} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BIN_DIR})
+    set_target_properties(${tmpname} PROPERTIES OUTPUT_NAME ${tmpname}${BUILD_POSTFIX})
+  endif(ctest_flag)
+endfunction(add_grpc_pb_test_helper_fn)
+
+function(add_pb_ctest_fn test_name app_files pbuf_srcs)
+  set(args ${ARGN})
+  add_grpc_pb_test_helper_fn(true false "${test_name}" "${app_files}" "${pbuf_srcs}" "${args}")
+endfunction(add_pb_ctest_fn)
+
+function(add_grpc_pb_ctest_fn test_name app_files pbuf_srcs)
+  set(args ${ARGN})
+  add_grpc_pb_test_helper_fn(true true "${test_name}" "${app_files}" "${pbuf_srcs}" "${args}")
+endfunction(add_grpc_pb_ctest_fn)
+
+function(add_pb_test_fn test_name app_files pbuf_srcs)
+  set(args ${ARGN})
+  add_grpc_pb_test_helper_fn(false false "${test_name}" "${app_files}" "${pbuf_srcs}" "${args}")
+endfunction(add_pb_test_fn)
+
+function(add_grpc_pb_test_fn test_name app_files pbuf_srcs)
+  set(args ${ARGN})
+  add_grpc_pb_test_helper_fn(false true "${test_name}" "${app_files}" "${pbuf_srcs}" "${args}")
+endfunction(add_grpc_pb_test_fn)
 
 ######################################
 #           SubDirectories           #
