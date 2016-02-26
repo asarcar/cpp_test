@@ -48,7 +48,6 @@
  */
 
 // Standard C++ Headers
-#include <chrono>
 #include <iostream>
 #include <memory>
 #include <random>
@@ -66,14 +65,20 @@
 #include "experiment_test/grpc_test/db/db_read_json.h"
 #include "experiment_test/grpc_test/protos/route_guide.grpc.pb.h"
 #include "utils/basic/basictypes.h"
+#include "utils/basic/clock.h"
 #include "utils/basic/fassert.h"
 #include "utils/basic/init.h"
 
 using grpc::Channel;
+using grpc::ClientAsyncResponseReader;
+using grpc::ClientAsyncReader;
+using grpc::ClientAsyncWriter;
+using grpc::ClientAsyncReaderWriter;
 using grpc::ClientContext;
 using grpc::ClientReader;
 using grpc::ClientReaderWriter;
 using grpc::ClientWriter;
+using grpc::CompletionQueue;
 using grpc::Status;
 
 using asarcar::routeguide::Point;
@@ -110,6 +115,357 @@ RouteNote MakeRouteNote(const std::string& message,
   return n;
 }
 
+// Pure Virtual Class used to process RPC replies
+struct RxRPC {
+  explicit RxRPC(const string& rpc_name): name{rpc_name} {}
+  virtual ~RxRPC() {}
+  virtual bool ProcessReply() = 0;
+  virtual void ProcessFinish() {};
+  const string name;
+};
+
+static constexpr float kCoordFactor = 10000000.0;
+
+struct RxRPCFinish : public RxRPC {
+  explicit RxRPCFinish(const string& rpc_name, RxRPC *p): 
+      RxRPC{rpc_name + "-Finish"}, par_p{p}{}
+  bool ProcessReply() override {
+    DCHECK(status.ok()) << name << " RPC failed"
+                        << ": code=" << status.error_code()
+                        << ": message=" << status.error_message();
+    par_p->ProcessFinish();
+    delete par_p; // also free RxRPC structs embeddeded in parent
+    return true;
+  }
+  RxRPC             *par_p;
+  Status            status;
+};
+
+struct RxRPCGetFeature : public RxRPC {
+  RxRPCGetFeature(RouteGuide::Stub* stub_p, 
+                  CompletionQueue *cq_p,
+                  const Point& point) :
+      RxRPC{"GetFeature"}, 
+    rpc{stub_p->AsyncGetFeature(&context, point, cq_p)} {
+    rpc->Finish(&feature, &status, this);
+  }
+  bool ProcessReply() override {
+    DCHECK(status.ok()) << "GetFeature RPC failed"
+                        << ": code=" << status.error_code()
+                        << ": message=" << status.error_message();
+    DLOG(INFO) << "-------------- GetFeature --------------";
+    DCHECK(feature.has_location()) << "Server returns incomplete feature";
+    DLOG(INFO) << "Found Feature \"" << feature.name()  << "\" at ("
+               << feature.location().latitude()/kCoordFactor << ","
+               << feature.location().longitude()/kCoordFactor << ")";
+    // Once the reply is fully processed deallocate ourselves
+    delete this;
+    return true;
+  }
+  // Per RPC call context: deadline, authentication context, ...
+  ClientContext context;
+  Feature       feature;
+  Status        status;
+  // Asynchronous API: hold on to the "rpc" instance to rc updates 
+  // on the RPC and not trigger destroying the RPC until reply processed
+  unique_ptr<ClientAsyncResponseReader<Feature>> rpc; 
+};
+
+struct RxRPCReadFeatures : public RxRPC {
+  RxRPCReadFeatures(const vector<Feature> *feature_list_p) : 
+      RxRPC{"ReadFeatures"}, num_features_{feature_list_p->size()} {}
+  void InitRead(void) {
+    GPR_ASSERT(state_ == State::INVALID);
+    state_ = State::READING;
+    read_stream->Read(&feature_, this);
+  }
+  bool ProcessReply() override {
+    GPR_ASSERT(state_ == State::READING);
+    flist_.push_back(feature_);
+
+    // Bug: Last unconsumed Read message causes memory leak or assertion
+    // iomgr.c:77:  LEAKED OBJECT: tcp-client:ipv4:127.0.0.1:50051 0x16301f8    
+    // The unconsumed READ returns with a failed status on cq_.Next
+    // as the referenced tag is already destroyed!
+    if (flist_.size() < num_features_) 
+      read_stream->Read(&feature_, this);
+    return false;
+  }
+  void ProcessFinish() override {
+    state_ = State::FINISHED;
+    DLOG(INFO) << "-------------- ListFeatures --------------";
+    // for(const Feature& f: flist_) 
+    //   DLOG(INFO) << "Found Feature \"" << f.name()  << "\" at ("
+    //              << f.location().latitude()/kCoordFactor << ","
+    //              << f.location().longitude()/kCoordFactor << ")";
+    DLOG(INFO) << "#Features returned with matching criteria " 
+               << flist_.size();
+  }
+  // Asynchronous API: hold on to the "rpc" instance to rc updates 
+  // on the RPC and not trigger destroying the RPC until reply processed
+  unique_ptr<ClientAsyncReader<Feature>> read_stream;
+ private:
+  const size_t num_features_;
+  enum class State {INVALID, READING, FINISHED};
+  State           state_{State::INVALID};
+  Feature         feature_;
+  vector<Feature> flist_;
+};
+
+struct RxRPCListFeatures : public RxRPC {
+  RxRPCListFeatures(RouteGuide::Stub* stub_p, 
+                    CompletionQueue *cq_p,
+                    const Rectangle& rect,
+                    const vector<Feature> *flist_p) : 
+      RxRPC{"ListFeatures"}
+  {
+    finish_p.reset(new RxRPCFinish{"ListFeatures", this});
+    rx_read_features_p.reset(new RxRPCReadFeatures{flist_p});
+    unique_ptr<ClientAsyncReader<Feature>> 
+        stream{stub_p->AsyncListFeatures(&context, rect, cq_p, this)};
+    stream->Finish(&finish_p->status, finish_p.get());
+    rx_read_features_p->read_stream.swap(stream);
+  }
+  bool ProcessReply() override {
+    rx_read_features_p->InitRead();
+    return false;
+  }
+  void ProcessFinish() override {
+    rx_read_features_p->ProcessFinish();
+  }
+  unique_ptr<RxRPCFinish>       finish_p;
+  unique_ptr<RxRPCReadFeatures> rx_read_features_p{nullptr};
+  ClientContext context;
+};
+
+struct RxRPCWritePoints : public RxRPC {
+  explicit RxRPCWritePoints(const vector<Feature> *flist_p) : 
+      RxRPC{"RecordRoute"}, flist_p_{flist_p} {}
+  void InitWrite() {
+    GPR_ASSERT(state_ == State::INVALID);
+    state_ = State::WRITING;
+    ProcessReply();
+  }
+  bool ProcessReply() override {
+    switch(state_) {
+      case State::WRITING:
+        const Feature *feature_p;
+        size_t  pos;
+        // Stop writing when nothing to write or when 
+        // kPoints have been successfully written
+        if (flist_p_->size() == 0 || cur_idx_ >= kPoints_) {
+          state_ = State::WRITING_DONE;
+          write_stream->WritesDone(this);
+          break;
+        }
+        pos = IdxArray_[cur_idx_] % flist_p_->size();
+        ++cur_idx_;
+        feature_p = &flist_p_->at(pos);
+        // introduce delay to validate elapsed time
+        this_thread::sleep_for(chrono::milliseconds(kMSecs_));
+        write_stream->Write(feature_p->location(), this);
+        break;
+      default:
+        // RxRPCRecordRoute::ProcessReply: 
+        // never sees INVALID or FINISHED state. 
+        GPR_ASSERT(state_ == State::WRITING_DONE);
+        state_ = State::FINISHED;
+        break;
+    }
+    return false;
+  }
+  void ProcessFinish() override {
+    GPR_ASSERT(state_ == State::FINISHED);
+    DLOG(INFO) << "-------------- RecordRoute --------------";
+    DLOG(INFO) << "Finished trip with " 
+               << route_summary.point_count() << " points"
+               << ": Passed " << route_summary.feature_count() << " features"
+               << ": Travelled " << route_summary.distance() << " meters"
+               << ": Time Taken " << route_summary.elapsed_time() << " milliseconds";
+
+  }
+  RouteSummary  route_summary;
+  // Asynchronous API: hold on to the "rpc" instance to rc updates 
+  // on the RPC and not trigger destroying the RPC until reply processed
+  unique_ptr<ClientAsyncWriter<Point>> write_stream; 
+ private:
+  enum class State {INVALID, WRITING, WRITING_DONE, FINISHED};
+  State            state_{State::INVALID};  
+  size_t           cur_idx_{0};
+  const vector<Feature>* flist_p_;
+  static constexpr Clock::TimeMSecs kMSecs_{10};
+  static constexpr size_t kPoints_{5};
+  static constexpr array<int, kPoints_> IdxArray_{{2, 3, 5, 7, 11}};          
+};
+
+constexpr Clock::TimeMSecs RxRPCWritePoints::kMSecs_;
+constexpr size_t RxRPCWritePoints::kPoints_;
+constexpr array<int, RxRPCWritePoints::kPoints_> 
+RxRPCWritePoints::IdxArray_;
+
+struct RxRPCRecordRoute : public RxRPC {
+  RxRPCRecordRoute(RouteGuide::Stub* stub_p, 
+                   CompletionQueue *cq_p,
+                   const vector<Feature> *flist_p) : 
+      RxRPC{"RecordRoute"}
+  {
+    finish_p.reset(new RxRPCFinish{"RecordRoute", this});
+    rx_write_points_p.reset(new RxRPCWritePoints{flist_p});
+    unique_ptr<ClientAsyncWriter<Point>> stream = 
+        stub_p->AsyncRecordRoute(&context, 
+                                 &rx_write_points_p->route_summary, 
+                                 cq_p, this);
+    stream->Finish(&finish_p->status, finish_p.get());
+    rx_write_points_p->write_stream.swap(stream);
+  }
+  bool ProcessReply() override {
+    rx_write_points_p->InitWrite();
+    return false;
+  }
+  void ProcessFinish() override {  
+    rx_write_points_p->ProcessFinish();
+  }
+  unique_ptr<RxRPCFinish>      finish_p;
+  unique_ptr<RxRPCWritePoints> rx_write_points_p;
+  ClientContext context;
+};
+
+struct RxRPCChatWriter : public RxRPC {
+  RxRPCChatWriter() : 
+      RxRPC{"RouteChatWriter"},
+    client_notes_{{
+        MakeRouteNote("Message-0", 0, 0),
+        MakeRouteNote("Message-1", 0, 10000000),
+        MakeRouteNote("Message-2", 10000000, 0),
+        MakeRouteNote("Message-3", 10000000, 10000000),
+        MakeRouteNote("Message-4", 20000000, 0),
+        MakeRouteNote("Message-5", 10000000, 0),
+        MakeRouteNote("Message-6", 0, 0),
+        MakeRouteNote("Message-7", 0, 20000000)
+            }} {}
+  void InitWrite() {
+    GPR_ASSERT(state_ == State::CREATED);
+    state_ = State::WRITING;
+    ProcessReply();
+  }
+  bool ProcessReply() {
+    switch (state_) {
+      case State::WRITING:
+        RouteNote* note_p;
+        // Stop writing when kPoints have been successfully written
+        if (idx_ >= kNotes_) {
+          state_ = State::WRITING_DONE;
+          stream->WritesDone(this);
+          break;
+        }
+        note_p = &client_notes_.at(idx_); 
+        ++idx_;
+        stream->Write(*note_p, this);
+        // DLOG(INFO) << "Tx Note msg " << note_p->message()
+        //            << " at (" 
+        //            << note_p->location().latitude()/kCoordFactor << ","
+        //            << note_p->location().longitude()/kCoordFactor << ")";
+        break;
+      default:
+        // RxRPCRecordRoute::ProcessReply: never sees FINISHED state. 
+        // RxRPCFinish::ProcessReply: handles FINISHED state...
+        GPR_ASSERT(state_ == State::WRITING_DONE);
+        state_ = State::FINISHED;
+        break;
+    }
+    return false;
+  }
+  void ProcessFinish() {
+    GPR_ASSERT(state_ == State::FINISHED);
+    DLOG(INFO) << "WriteStream Finished";
+  }
+  // Asynch API: hold on to the "stream" instance to note updates on the RPC
+  // and not trigger destroying the RPC until all replies processed
+  shared_ptr<ClientAsyncReaderWriter<RouteNote,RouteNote>> stream;
+ private:
+  enum class State {CREATED, WRITING, WRITING_DONE, FINISHED};
+  State             state_{State::CREATED};
+  size_t            idx_{0};
+  static constexpr size_t kNotes_{8};
+  array<RouteNote, kNotes_> client_notes_;
+};
+
+constexpr size_t RxRPCChatWriter::kNotes_;
+
+struct RxRPCChatReader : public RxRPC { 
+  RxRPCChatReader() : RxRPC{"ChatReader "} {}
+  void InitRead(void) {
+    GPR_ASSERT(state_ == State::INVALID);
+    state_ = State::READING;
+    stream->Read(&note_, this);
+  }
+  bool ProcessReply() override {
+    GPR_ASSERT(state_ == State::READING);
+    nlist_.push_back(note_);
+    // Bug: Last unconsumed Read message causes memory leak or assertion
+    // iomgr.c:77: LEAKED OBJECT: tcp-client:ipv4:127.0.0.1:50051 0x16301f8    
+    // The unconsumed READ returns with a failed status on cq_.Next
+    // as the referenced tag is already destroyed!
+    if (nlist_.size() < kNotesReturned_) 
+      stream->Read(&note_, this);
+    return false;
+  }
+  void ProcessFinish() override {
+    state_ = State::FINISHED;
+    DLOG(INFO) << "ReadStream Finished";
+    DLOG(INFO) << "--------------- RouteChat ---------------";
+    for(const RouteNote& n: nlist_) 
+      DLOG(INFO) << "Found Note \"" << n.message()  << "\" at ("
+                 << n.location().latitude()/kCoordFactor << ","
+                 << n.location().longitude()/kCoordFactor << ")";
+    DLOG(INFO) << "#RouteNotes returned with matching criteria " 
+               << nlist_.size();
+  }
+  // Asynchronous API: hold on to the "rpc" instance to rc updates 
+  // on the RPC and not trigger destroying the RPC until reply processed
+  shared_ptr<ClientAsyncReaderWriter<RouteNote,RouteNote>> stream;
+ private:
+  enum class State {INVALID, READING, FINISHED};
+  State           state_{State::INVALID};
+  RouteNote       note_;
+  vector<RouteNote> nlist_;
+  static constexpr size_t kNotesReturned_{2};
+};
+
+constexpr size_t RxRPCChatReader::kNotesReturned_;
+
+// Concurrency Examples:
+// test/cpp/thread_stress_test.cc
+// test/cpp/end2end/thread_stress_test.cc
+// test/cpp/qps/*async.cc
+struct RxRPCRouteChat : public RxRPC {
+  explicit RxRPCRouteChat(RouteGuide::Stub* stub_p, 
+                          CompletionQueue *cq_p) :
+      RxRPC{"RouteChat"} {
+    finish_p.reset(new RxRPCFinish{"RouteChat", this});
+    writer_p.reset(new RxRPCChatWriter{});
+    reader_p.reset(new RxRPCChatReader{});
+    unique_ptr<ClientAsyncReaderWriter<RouteNote, RouteNote>>
+               stream = stub_p->AsyncRouteChat(&context, cq_p, this);
+    stream->Finish(&finish_p->status, finish_p.get());
+    reader_p->stream.reset(stream.release());
+    writer_p->stream = reader_p->stream;
+  }
+  bool ProcessReply() override {
+    writer_p->InitWrite(); // run in a separate thread
+    reader_p->InitRead();
+    return false;
+  }
+  void ProcessFinish() override {  
+    writer_p->ProcessFinish();
+    reader_p->ProcessFinish();
+  }
+  unique_ptr<RxRPCFinish>     finish_p;
+  unique_ptr<RxRPCChatWriter> writer_p;
+  unique_ptr<RxRPCChatReader> reader_p;
+  ClientContext context;
+};
+
 class RouteGuideClient {
  public:
   RouteGuideClient(std::shared_ptr<Channel> channel, const string& db_path)
@@ -118,154 +474,74 @@ class RouteGuideClient {
     dbrj.Parse(&feature_list_);
     DLOG(INFO) << "Features Read: " << feature_list_.size();
   }
-
-  void GetFeature() {
-    Point point;
-    Feature feature;
-    point = MakePoint(409146138, -746188906);
-    GetOneFeature(point, &feature);
-    point = MakePoint(0, 0);
-    GetOneFeature(point, &feature);
+  ~RouteGuideClient() {
+    // Shutdown the completion queue
+    cq_.Shutdown();
   }
 
-  void ListFeatures() {
-    routeguide::Rectangle rect;
-    Feature feature;
-    ClientContext context;
+  // One way to multi-thread run initiation of TxRPCs in any thread
+  void TxRPCs(void) {
+    TxRPCGetFeature();
+    TxRPCListFeatures();
+    TxRPCRecordRoute();
+    TxRPCRouteChat();
+  }
 
+  // One way to multi-thread: Run each RPC callback in any thread 
+  void RxRPCs(void) {
+    constexpr int kNumTxRPCs = 4;
+    for (int i=0; i<kNumTxRPCs; ++i) {
+      void *tag   = nullptr; // unique RPC call identifier
+      bool ok     = false;   // has the RPC Finish call executed successfully
+      bool finish = false;
+      while (!finish) {
+        // Block until the next result is available in the completion queue "cq".
+        cq_.Next(&tag, &ok);
+        // corresponds solely to the request for updates introduced by Finish().
+        GPR_ASSERT(ok);
+        RxRPC *rpc_struct_p = static_cast<RxRPC *>(tag);
+        // DLOG(INFO) << "RPC " << rpc_struct_p->name << " event-Q";
+        finish = rpc_struct_p->ProcessReply();
+      }
+    }
+    return;
+  }
+
+ private:
+  unique_ptr<RouteGuide::Stub> stub_;
+  vector<Feature> feature_list_;
+  // producer-consumer Q used to communicate with gRPC runtime.
+  CompletionQueue cq_;
+
+  void TxRPCGetFeature() {
+    Point point = MakePoint(409146138, -746188906);
+    DLOG(INFO) << "Looking for feature for point: (" 
+               << point.latitude() << ","
+               << point.longitude() << ")";
+    new RxRPCGetFeature{stub_.get(), &cq_, point};
+  }
+
+  void TxRPCListFeatures() {
+    routeguide::Rectangle rect;
     rect.mutable_lo()->set_latitude(400000000);
     rect.mutable_lo()->set_longitude(-750000000);
     rect.mutable_hi()->set_latitude(420000000);
     rect.mutable_hi()->set_longitude(-730000000);
-    LOG(INFO) << "Looking for features between 40, -75 and 42, -73";
-
-    std::unique_ptr<ClientReader<Feature> > reader(
-        stub_->ListFeatures(&context, rect));
-    while (reader->Read(&feature)) {
-      if (feature.name().empty()) {
-        LOG(INFO) << "Found no feature at "
-                  << feature.location().latitude()/kCoordFactor_ << ", "
-                  << feature.location().longitude()/kCoordFactor_;
-        continue;
-      }
-      LOG(INFO) << "Found feature called "
-                << feature.name() << " at "
-                << feature.location().latitude()/kCoordFactor_ << ", "
-                << feature.location().longitude()/kCoordFactor_;
-    }
-    Status status = reader->Finish();
-    if (status.ok()) {
-      LOG(INFO) << "ListFeatures rpc succeeded.";
-    } else {
-      LOG(ERROR) << "ListFeatures rpc failed.";
-    }
+    DLOG(INFO) << "Looking for features between ("
+               << rect.lo().latitude() << ","
+               << rect.lo().longitude() << ") and ("
+               << rect.hi().latitude() << ","
+               << rect.hi().longitude() << ")";
+    new RxRPCListFeatures{stub_.get(), &cq_, rect, &feature_list_};
   }
 
-  void RecordRoute() {
-    Point point;
-    RouteSummary stats;
-    ClientContext context;
-    const int kPoints = 10;
-    unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
-
-    std::default_random_engine generator(seed);
-    std::uniform_int_distribution<int> feature_distribution(
-        0, feature_list_.size() - 1);
-    std::uniform_int_distribution<int> delay_distribution(
-        500, 1500);
-
-    std::unique_ptr<ClientWriter<Point> > writer(
-        stub_->RecordRoute(&context, &stats));
-    for (int i = 0; i < kPoints; i++) {
-      const Feature& f = feature_list_.at(feature_distribution(generator));
-      LOG(INFO) << "Visiting point "
-                << f.location().latitude()/kCoordFactor_ << ", "
-                << f.location().longitude()/kCoordFactor_;
-      if (!writer->Write(f.location())) {
-        // Broken stream.
-        break;
-      }
-      std::this_thread::sleep_for(std::chrono::milliseconds(
-          delay_distribution(generator)));
-    }
-    writer->WritesDone();
-    Status status = writer->Finish();
-    if (status.ok()) {
-      LOG(INFO) << "Finished trip with " << stats.point_count() << " points\n"
-                << "Passed " << stats.feature_count() << " features\n"
-                << "Travelled " << stats.distance() << " meters\n"
-                << "It took " << stats.elapsed_time() << " seconds";
-    } else {
-      LOG(ERROR) << "RecordRoute rpc failed.";
-    }
+  void TxRPCRecordRoute() {
+    new RxRPCRecordRoute{stub_.get(), &cq_, &feature_list_};
   }
 
-  void RouteChat() {
-    ClientContext context;
-
-    std::shared_ptr<ClientReaderWriter<RouteNote, RouteNote> > stream(
-        stub_->RouteChat(&context));
-
-    std::thread writer([stream]() {
-      std::vector<RouteNote> notes{
-        MakeRouteNote("First message", 0, 0),
-        MakeRouteNote("Second message", 0, 1),
-        MakeRouteNote("Third message", 1, 0),
-        MakeRouteNote("Fourth message", 0, 0)};
-      for (const RouteNote& note : notes) {
-        LOG(INFO) << "Sending message " << note.message()
-                  << " at " << note.location().latitude() << ", "
-                  << note.location().longitude();
-        stream->Write(note);
-      }
-      stream->WritesDone();
-    });
-
-    RouteNote server_note;
-    while (stream->Read(&server_note)) {
-      LOG(INFO) << "Got message " << server_note.message()
-                << " at " << server_note.location().latitude() << ", "
-                << server_note.location().longitude();
-    }
-    writer.join();
-    Status status = stream->Finish();
-    if (!status.ok()) {
-      LOG(ERROR) << "RouteChat rpc failed"
-                 << ": code=" << status.error_code() 
-                 << ": message=" << status.error_message();
-    }
+  void TxRPCRouteChat() {
+    new RxRPCRouteChat{stub_.get(), &cq_};
   }
-
- private:
-
-  bool GetOneFeature(const Point& point, Feature* feature) {
-    ClientContext context;
-    Status status = stub_->GetFeature(&context, point, feature);
-    if (!status.ok()) {
-      LOG(ERROR) << "GetFeature rpc failed"
-                 << ": code=" << status.error_code()
-                 << ": message=" << status.error_message();
-      return false;
-    }
-    if (!feature->has_location()) {
-      LOG(ERROR) << "Server returns incomplete feature.";
-      return false;
-    }
-    if (feature->name().empty()) {
-      LOG(INFO) << "Found no feature at "
-                << feature->location().latitude()/kCoordFactor_ << ", "
-                << feature->location().longitude()/kCoordFactor_;
-    } else {
-      LOG(INFO) << "Found feature called " << feature->name()  << " at "
-                << feature->location().latitude()/kCoordFactor_ << ", "
-                << feature->location().longitude()/kCoordFactor_;
-    }
-    return true;
-  }
-
-  const float kCoordFactor_ = 10000000.0;
-  std::unique_ptr<RouteGuide::Stub> stub_;
-  std::vector<Feature> feature_list_;
 };
 
 // Flag Declarations
@@ -281,18 +557,10 @@ int main(int argc, char** argv) {
       grpc::CreateChannel("localhost:50051", grpc::InsecureCredentials()),
       FLAGS_db_path);
 
-  LOG(INFO) << argv[0] << " Executing Test";
-
-  LOG(INFO) << "-------------- GetFeature --------------";
-  guide.GetFeature();
-  LOG(INFO) << "-------------- ListFeatures --------------";
-  guide.ListFeatures();
-  LOG(INFO) << "-------------- RecordRoute --------------";
-  guide.RecordRoute();
-  LOG(INFO) << "-------------- RouteChat --------------";
-  guide.RouteChat();
-
-  LOG(INFO) << argv[0] << " Test Passed";
+  DLOG(INFO) << argv[0] << " Executing Test";
+  guide.TxRPCs();
+  guide.RxRPCs();
+  DLOG(INFO) << argv[0] << " Test Passed";
 
   return 0;
 }
@@ -300,7 +568,7 @@ int main(int argc, char** argv) {
 DEFINE_bool(auto_test, false, 
             "test run programmatically (when true) or manually (when false)");
 
-DEFINE_string(db_path, "../testdata/route_guide_db.json", 
+DEFINE_string(db_path, "route_guide_db.json", 
               "path to route_guide_db.json");
 
 

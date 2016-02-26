@@ -182,9 +182,9 @@ class RouteGuideImpl final : public RouteGuide::Service {
     summary->set_point_count(point_count);
     summary->set_feature_count(feature_count);
     summary->set_distance(static_cast<long>(distance));
-    auto secs = std::chrono::duration_cast<std::chrono::seconds>(
+    auto millisecs = std::chrono::duration_cast<std::chrono::milliseconds>(
         end_time - start_time);
-    summary->set_elapsed_time(secs.count());
+    summary->set_elapsed_time(millisecs.count());
 
     return Status::OK;
   }
@@ -240,6 +240,6 @@ int main(int argc, char** argv) {
 DEFINE_bool(auto_test, false, 
             "test run programmatically (when true) or manually (when false)");
 
-DEFINE_string(db_path, "../testdata/route_guide_db.json", 
+DEFINE_string(db_path, "route_guide_db.json", 
               "path to route_guide_db.json");
 
