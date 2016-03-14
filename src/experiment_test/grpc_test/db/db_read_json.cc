@@ -59,6 +59,7 @@
 // Google Headers
 #include <glog/logging.h>   
 // Local Headers
+#include "utils/basic/fassert.h"
 #include "experiment_test/grpc_test/db/db_read_json.h"
 
 using namespace std;
@@ -108,7 +109,7 @@ void DbReadJSON::Parse(vector<Feature>* flist_p) {
 string DbReadJSON::ReadJSONFile(const string& db_file_name) {
   ifstream db_file(db_file_name);
   if (!db_file.is_open()) {
-    LOG(ERROR) << "Failed to open " << db_file_name << endl;
+    LOG(ERROR) << "Failed to open " << db_file_name;
     return "";
   }
   stringstream db;

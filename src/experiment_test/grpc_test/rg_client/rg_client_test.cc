@@ -119,7 +119,7 @@ RouteNote MakeRouteNote(const std::string& message,
 struct RxRPC {
   explicit RxRPC(const string& rpc_name): name{rpc_name} {}
   virtual ~RxRPC() {}
-  virtual bool ProcessReply() = 0;
+  virtual bool ProcessReply(bool over) = 0;
   virtual void ProcessFinish() {};
   const string name;
 };
@@ -129,7 +129,7 @@ static constexpr float kCoordFactor = 10000000.0;
 struct RxRPCFinish : public RxRPC {
   explicit RxRPCFinish(const string& rpc_name, RxRPC *p): 
       RxRPC{rpc_name + "-Finish"}, par_p{p}{}
-  bool ProcessReply() override {
+  bool ProcessReply(bool over) override {
     DCHECK(status.ok()) << name << " RPC failed"
                         << ": code=" << status.error_code()
                         << ": message=" << status.error_message();
@@ -149,7 +149,7 @@ struct RxRPCGetFeature : public RxRPC {
     rpc{stub_p->AsyncGetFeature(&context, point, cq_p)} {
     rpc->Finish(&feature, &status, this);
   }
-  bool ProcessReply() override {
+  bool ProcessReply(bool over) override {
     DCHECK(status.ok()) << "GetFeature RPC failed"
                         << ": code=" << status.error_code()
                         << ": message=" << status.error_message();
@@ -172,27 +172,29 @@ struct RxRPCGetFeature : public RxRPC {
 };
 
 struct RxRPCReadFeatures : public RxRPC {
-  RxRPCReadFeatures(const vector<Feature> *feature_list_p) : 
-      RxRPC{"ReadFeatures"}, num_features_{feature_list_p->size()} {}
+  RxRPCReadFeatures(const vector<Feature> *feature_list_p,
+                    RxRPC *rx_rpc_p) : 
+      RxRPC{"ReadFeatures"}, num_features_{feature_list_p->size()}, 
+      finish_p(new RxRPCFinish{"ListFeatures", rx_rpc_p}) {}
   void InitRead(void) {
     GPR_ASSERT(state_ == State::INVALID);
     state_ = State::READING;
     read_stream->Read(&feature_, this);
   }
-  bool ProcessReply() override {
+  bool ProcessReply(bool over) override {
     GPR_ASSERT(state_ == State::READING);
+    if (over) {
+      // server closed stream (i.e. call WritesDone)
+      read_stream->Finish(&finish_p->status, finish_p.get());
+      return false;
+    }
     flist_.push_back(feature_);
-
-    // Bug: Last unconsumed Read message causes memory leak or assertion
-    // iomgr.c:77:  LEAKED OBJECT: tcp-client:ipv4:127.0.0.1:50051 0x16301f8    
-    // The unconsumed READ returns with a failed status on cq_.Next
-    // as the referenced tag is already destroyed!
-    if (flist_.size() < num_features_) 
-      read_stream->Read(&feature_, this);
+    read_stream->Read(&feature_, this);
     return false;
   }
   void ProcessFinish() override {
     state_ = State::FINISHED;
+    DLOG(INFO) << "ListFeatures ReadStream Finished";
     DLOG(INFO) << "-------------- ListFeatures --------------";
     // for(const Feature& f: flist_) 
     //   DLOG(INFO) << "Found Feature \"" << f.name()  << "\" at ("
@@ -210,6 +212,7 @@ struct RxRPCReadFeatures : public RxRPC {
   State           state_{State::INVALID};
   Feature         feature_;
   vector<Feature> flist_;
+  unique_ptr<RxRPCFinish>       finish_p;
 };
 
 struct RxRPCListFeatures : public RxRPC {
@@ -219,34 +222,32 @@ struct RxRPCListFeatures : public RxRPC {
                     const vector<Feature> *flist_p) : 
       RxRPC{"ListFeatures"}
   {
-    finish_p.reset(new RxRPCFinish{"ListFeatures", this});
-    rx_read_features_p.reset(new RxRPCReadFeatures{flist_p});
-    unique_ptr<ClientAsyncReader<Feature>> 
-        stream{stub_p->AsyncListFeatures(&context, rect, cq_p, this)};
-    stream->Finish(&finish_p->status, finish_p.get());
-    rx_read_features_p->read_stream.swap(stream);
+    rx_read_features_p.reset(new RxRPCReadFeatures{flist_p, this});
+    rx_read_features_p->read_stream = 
+        stub_p->AsyncListFeatures(&context, rect, cq_p, this);
   }
-  bool ProcessReply() override {
+  bool ProcessReply(bool over) override {
     rx_read_features_p->InitRead();
     return false;
   }
   void ProcessFinish() override {
     rx_read_features_p->ProcessFinish();
   }
-  unique_ptr<RxRPCFinish>       finish_p;
   unique_ptr<RxRPCReadFeatures> rx_read_features_p{nullptr};
   ClientContext context;
 };
 
 struct RxRPCWritePoints : public RxRPC {
-  explicit RxRPCWritePoints(const vector<Feature> *flist_p) : 
-      RxRPC{"RecordRoute"}, flist_p_{flist_p} {}
+  explicit RxRPCWritePoints(const vector<Feature> *flist_p, 
+                            RxRPC *rx_rpc_p) : 
+      RxRPC{"RecordRoute"}, flist_p_{flist_p}, 
+    finish_p(new RxRPCFinish{"RecordRoute", rx_rpc_p}) {}
   void InitWrite() {
     GPR_ASSERT(state_ == State::INVALID);
     state_ = State::WRITING;
-    ProcessReply();
+    ProcessReply(false);
   }
-  bool ProcessReply() override {
+  bool ProcessReply(bool over) override {
     switch(state_) {
       case State::WRITING:
         const Feature *feature_p;
@@ -270,12 +271,14 @@ struct RxRPCWritePoints : public RxRPC {
         // never sees INVALID or FINISHED state. 
         GPR_ASSERT(state_ == State::WRITING_DONE);
         state_ = State::FINISHED;
+        write_stream->Finish(&finish_p->status, finish_p.get());
         break;
     }
     return false;
   }
   void ProcessFinish() override {
     GPR_ASSERT(state_ == State::FINISHED);
+    DLOG(INFO) << "RecordRoute WriteStream Finished";
     DLOG(INFO) << "-------------- RecordRoute --------------";
     DLOG(INFO) << "Finished trip with " 
                << route_summary.point_count() << " points"
@@ -296,6 +299,7 @@ struct RxRPCWritePoints : public RxRPC {
   static constexpr Clock::TimeMSecs kMSecs_{10};
   static constexpr size_t kPoints_{5};
   static constexpr array<int, kPoints_> IdxArray_{{2, 3, 5, 7, 11}};          
+  unique_ptr<RxRPCFinish>      finish_p;
 };
 
 constexpr Clock::TimeMSecs RxRPCWritePoints::kMSecs_;
@@ -309,23 +313,19 @@ struct RxRPCRecordRoute : public RxRPC {
                    const vector<Feature> *flist_p) : 
       RxRPC{"RecordRoute"}
   {
-    finish_p.reset(new RxRPCFinish{"RecordRoute", this});
-    rx_write_points_p.reset(new RxRPCWritePoints{flist_p});
-    unique_ptr<ClientAsyncWriter<Point>> stream = 
+    rx_write_points_p.reset(new RxRPCWritePoints{flist_p, this});
+    rx_write_points_p->write_stream = 
         stub_p->AsyncRecordRoute(&context, 
                                  &rx_write_points_p->route_summary, 
                                  cq_p, this);
-    stream->Finish(&finish_p->status, finish_p.get());
-    rx_write_points_p->write_stream.swap(stream);
   }
-  bool ProcessReply() override {
+  bool ProcessReply(bool over) override {
     rx_write_points_p->InitWrite();
     return false;
   }
   void ProcessFinish() override {  
     rx_write_points_p->ProcessFinish();
   }
-  unique_ptr<RxRPCFinish>      finish_p;
   unique_ptr<RxRPCWritePoints> rx_write_points_p;
   ClientContext context;
 };
@@ -346,9 +346,9 @@ struct RxRPCChatWriter : public RxRPC {
   void InitWrite() {
     GPR_ASSERT(state_ == State::CREATED);
     state_ = State::WRITING;
-    ProcessReply();
+    ProcessReply(false);
   }
-  bool ProcessReply() {
+  bool ProcessReply(bool over) {
     switch (state_) {
       case State::WRITING:
         RouteNote* note_p;
@@ -377,7 +377,7 @@ struct RxRPCChatWriter : public RxRPC {
   }
   void ProcessFinish() {
     GPR_ASSERT(state_ == State::FINISHED);
-    DLOG(INFO) << "WriteStream Finished";
+    DLOG(INFO) << "ChatWriter WriteStream Finished";
   }
   // Asynch API: hold on to the "stream" instance to note updates on the RPC
   // and not trigger destroying the RPC until all replies processed
@@ -393,26 +393,34 @@ struct RxRPCChatWriter : public RxRPC {
 constexpr size_t RxRPCChatWriter::kNotes_;
 
 struct RxRPCChatReader : public RxRPC { 
-  RxRPCChatReader() : RxRPC{"ChatReader "} {}
+  RxRPCChatReader(RxRPC *rx_rpc_p) : 
+      RxRPC{"ChatReader"},
+    finish_p(new RxRPCFinish{"RouteChat", rx_rpc_p}) {}
   void InitRead(void) {
     GPR_ASSERT(state_ == State::INVALID);
     state_ = State::READING;
     stream->Read(&note_, this);
   }
-  bool ProcessReply() override {
+  bool ProcessReply(bool over) override {
     GPR_ASSERT(state_ == State::READING);
+    if (over) {
+      // server closed stream (i.e. call WritesDone)
+      // Bug?: Shouldn't we call Finish only after Read & Write is over? 
+      stream->Finish(&finish_p->status, finish_p.get());
+      return false;
+    }
     nlist_.push_back(note_);
     // Bug: Last unconsumed Read message causes memory leak or assertion
     // iomgr.c:77: LEAKED OBJECT: tcp-client:ipv4:127.0.0.1:50051 0x16301f8    
     // The unconsumed READ returns with a failed status on cq_.Next
     // as the referenced tag is already destroyed!
-    if (nlist_.size() < kNotesReturned_) 
-      stream->Read(&note_, this);
+    // if (nlist_.size() < kNotesReturned_) 
+    stream->Read(&note_, this);
     return false;
   }
   void ProcessFinish() override {
     state_ = State::FINISHED;
-    DLOG(INFO) << "ReadStream Finished";
+    DLOG(INFO) << "ChatReader ReadStream Finished";
     DLOG(INFO) << "--------------- RouteChat ---------------";
     for(const RouteNote& n: nlist_) 
       DLOG(INFO) << "Found Note \"" << n.message()  << "\" at ("
@@ -429,6 +437,7 @@ struct RxRPCChatReader : public RxRPC {
   State           state_{State::INVALID};
   RouteNote       note_;
   vector<RouteNote> nlist_;
+  unique_ptr<RxRPCFinish>     finish_p;
   static constexpr size_t kNotesReturned_{2};
 };
 
@@ -442,16 +451,14 @@ struct RxRPCRouteChat : public RxRPC {
   explicit RxRPCRouteChat(RouteGuide::Stub* stub_p, 
                           CompletionQueue *cq_p) :
       RxRPC{"RouteChat"} {
-    finish_p.reset(new RxRPCFinish{"RouteChat", this});
     writer_p.reset(new RxRPCChatWriter{});
-    reader_p.reset(new RxRPCChatReader{});
+    reader_p.reset(new RxRPCChatReader{this});
     unique_ptr<ClientAsyncReaderWriter<RouteNote, RouteNote>>
                stream = stub_p->AsyncRouteChat(&context, cq_p, this);
-    stream->Finish(&finish_p->status, finish_p.get());
     reader_p->stream.reset(stream.release());
     writer_p->stream = reader_p->stream;
   }
-  bool ProcessReply() override {
+  bool ProcessReply(bool over) override {
     writer_p->InitWrite(); // run in a separate thread
     reader_p->InitRead();
     return false;
@@ -460,7 +467,6 @@ struct RxRPCRouteChat : public RxRPC {
     writer_p->ProcessFinish();
     reader_p->ProcessFinish();
   }
-  unique_ptr<RxRPCFinish>     finish_p;
   unique_ptr<RxRPCChatWriter> writer_p;
   unique_ptr<RxRPCChatReader> reader_p;
   ClientContext context;
@@ -477,6 +483,10 @@ class RouteGuideClient {
   ~RouteGuideClient() {
     // Shutdown the completion queue
     cq_.Shutdown();
+    // Drain all events still queued up
+    void *ignored_tag = nullptr;
+    bool ignored_ok = false;
+    while (cq_.Next(&ignored_tag, &ignored_ok));
   }
 
   // One way to multi-thread run initiation of TxRPCs in any thread
@@ -497,11 +507,10 @@ class RouteGuideClient {
       while (!finish) {
         // Block until the next result is available in the completion queue "cq".
         cq_.Next(&tag, &ok);
-        // corresponds solely to the request for updates introduced by Finish().
-        GPR_ASSERT(ok);
         RxRPC *rpc_struct_p = static_cast<RxRPC *>(tag);
         // DLOG(INFO) << "RPC " << rpc_struct_p->name << " event-Q";
-        finish = rpc_struct_p->ProcessReply();
+        // ok false for read on closed stream
+        finish = rpc_struct_p->ProcessReply(!ok); 
       }
     }
     return;
