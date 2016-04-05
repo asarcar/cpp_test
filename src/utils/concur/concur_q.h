@@ -100,7 +100,7 @@ class ConcurQ {
   void Push(NodeValueType&& val) {
     Node* tmp = new Node(std::move(val)); // ensure node alloc succeeds, then release
     // protect critical region form all producers
-    lock_guard<SpinLock> _{pro_lck_};
+    LockGuard<SpinLock> _{pro_lck_};
     tail_->next_ = tmp;
     // Never change the below below line of code to 
     //   tail_ = tail_->next
@@ -117,7 +117,7 @@ class ConcurQ {
     NodeValueType val{};
     {
       // protect all consumers from critical region
-      lock_guard<SpinLock> _{con_lck_};
+      LockGuard<SpinLock> _{con_lck_};
       Node* candidate_sentinel = sentinel_->next_;
       if (candidate_sentinel == nullptr)
         return val;

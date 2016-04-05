@@ -1,4 +1,4 @@
-// Copyright 2014 asarcar Inc.
+ // Copyright 2014 asarcar Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,12 +31,15 @@ using namespace std;
 
 class RangeBindorTester {
  public:
+  using IntPair     = pair<int,int>;
+  using ThreeIntMul = function<int(int, int, int)>;
+  using ManyIntMul  = function<int(IntPair,int,int,IntPair,int)>;
   RangeBindorTester(void) : 
-    mul_{
-      [](std::pair<int, int> v1, int a, int b, std::pair<int,int> v2, int c){
+      mul_{
+      [](IntPair v1, int a, int b, IntPair v2, int c){
         return v1.first*v1.second*a*b*v2.first*v2.second*c;
       }
-    } {}
+  } {}
   ~RangeBindorTester(void) {}
   void Run(void) {
     LOG(INFO) << "FN_BIND: Test";
@@ -45,23 +48,22 @@ class RangeBindorTester {
     return;
   }
  private:
-  using IntPair=std::pair<int,int>;
   // Bind Arguments to Positions
   template<typename Ret, typename... Args, int... Positions>
-  std::function<Ret(Args...)> 
-  fn_bind_arg_pos(std::function<Ret(Args...)>& fn_orig,
+  function<Ret(Args...)> 
+  fn_bind_arg_pos(function<Ret(Args...)>& fn_orig,
                   const Range<Positions...>&   arg_pos) {
-    return std::bind(fn_orig, std::_Placeholder<Positions>()...);
+    return bind(fn_orig, _Placeholder<Positions>()...);
   }
 
   template <typename Ret, typename... Args>
-  std::function<Ret(Args...)>
-  fn_bind(std::function<Ret(Args...)>& fn_orig) {
+  function<Ret(Args...)>
+  fn_bind(function<Ret(Args...)>& fn_orig) {
     auto range = BasicRangeBindor<sizeof...(Args)>();
     return fn_bind_arg_pos(fn_orig, range);
   }
 
-  function<int(IntPair,int,int,IntPair,int)>   mul_;
+  ManyIntMul mul_;
 };
 
 // Flag Declarations

@@ -21,8 +21,8 @@
 //! @author Arijit Sarcar <sarcar_a@yahoo.com>
 
 // C++ Standard Headers
-#include <condition_variable>   // std::condition_variable
 #include <deque>                // std::deque
+#include <condition_variable>   // std::condition_variable
 #include <iostream>             // std::cout
 #include <mutex>                // std::mutex
 #include <thread>               // std::thread
@@ -39,36 +39,38 @@
 namespace asarcar { namespace utils { namespace concur {
 //-----------------------------------------------------------------------------
 
-//! @class    rw_mutex
+//! @class    RWMutex
 //! @brief    Supports multiple readers and single writer
 //! behavior undefined if rw_lock is called recursively 
-class rw_mutex {
+class RWMutex {
  public:
-  rw_mutex(void)                         = default;
-  ~rw_mutex(void)                        = default;
-  rw_mutex(const rw_mutex& o)            = delete;
-  rw_mutex& operator=(const rw_mutex& o) = delete;
-  rw_mutex(rw_mutex&& o)                 = delete; 
-  rw_mutex& operator=(rw_mutex&& o)      = delete;
+  using QElem = std::pair<std::thread::id, LockMode>;
+  using QIterator = std::deque<QElem>::iterator;
+
+  RWMutex(void)                        = default;
+  ~RWMutex(void)                       = default;
+  RWMutex(const RWMutex& o)            = delete;
+  RWMutex& operator=(const RWMutex& o) = delete;
+  RWMutex(RWMutex&& o)                 = delete; 
+  RWMutex& operator=(RWMutex&& o)      = delete;
 
   void lock(LockMode mode = LockMode::EXCLUSIVE_LOCK);
   void unlock(void);
-  // TODO: bool try_lock(Lock::Mode mode);
-  friend std::ostream& operator<<(std::ostream& os, const rw_mutex& rwm);
+  friend std::ostream& operator<<(std::ostream& os, const RWMutex& rwm);
 
  private:
-  std::condition_variable       _cv{};
-  std::mutex                    _mutex{};
-  // queue of all threads pending this lock
-  std::deque<std::thread::id>   _q_pending{}; 
+  std::condition_variable       cv_{};
+  std::mutex                    mutex_{};
   // vector of all threads owning this lock
   // one may argue this should be a list for 
   // each insertion and deletion. benchmark shows that
   // vector exhibits better performance due to memory locality 
   // for small (<10K) number of elements
-  std::vector<std::thread::id>  _v_owners{};
-  LockMode                      _cur_mode{LockMode::UNLOCK};
-  int                           _num_readers{0};
+  std::vector<std::thread::id>  v_owners_{};
+  // deque is implemented as a chunks of blocks/arrays
+  std::deque<QElem>             q_pending_{}; 
+  LockMode                      cur_mode_{LockMode::UNLOCK};
+  int                           num_readers_{0};
 };    
 
 //-----------------------------------------------------------------------------

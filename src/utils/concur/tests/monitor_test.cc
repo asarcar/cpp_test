@@ -147,7 +147,7 @@ void CounterTest::AdvancedTest(void) {
                     });
                 }
 
-                atomic_val.fetch_add(numDel*delVal);
+                atomic_val += numDel*delVal;
               }
             });
   }

@@ -31,81 +31,107 @@
 #include "utils/basic/fassert.h"
 #include "utils/concur/rw_mutex.h"
 
+using namespace std;
+
 namespace asarcar { namespace utils { namespace concur {
 //-----------------------------------------------------------------------------
-void rw_mutex::lock(LockMode mode) {
-  FASSERT(mode != LockMode::UNLOCK);
-  std::thread::id my_th_id = std::this_thread::get_id();
+void RWMutex::lock(LockMode mode) {
+  DCHECK(mode != LockMode::UNLOCK);
+  QIterator it;
+  const QElem myElem{this_thread::get_id(), mode};
 
-  std::unique_lock<std::mutex> lck{_mutex};
+  std::unique_lock<std::mutex> lck{mutex_};
   // Add the thread to the queue of pending requests waiting for the lock
-  _q_pending.push_back(my_th_id);
-  _cv.wait(lck, [this, mode, my_th_id]() {
+  q_pending_.push_back(myElem);
+  cv_.wait(lck, [this, &myElem, &it]() {
       // A thread is allowed to own the lock when the following are true:
-      // 1. You are at the head of the queue. In order to prevent WR starvation
-      //    as RD always get through all the pending requests are queued up in
-      //    a double ended queue and locks are ONLY granted in that order. Note 
-      //    that this ensures fairness at the cost of throughput (i.e. we may not 
+      // 1. You are at the head of the queue or you are a shared lock 
+      //    request but ahead of any exclusive lock request.
+      //    We do so to prevent Wr starvation as Rr always get through all the 
+      //    pending requests are queued up in a double ended queue. 
+      //    So shared locks ahead of exclusive lock request are granted in random
+      //    order. But interim exclusive lock requests are granted in strict FIFO
+      //    order. Ensures fairness at the cost of throughput (i.e. we may not 
       //    allow RD requests behind a WR request to progress ahead even though
       //    one could have satisfied the RD request).
       // 2.a. No thread is owning the lock is empty. So either WR or RD request
       //      may be satisfied OR
       // 2.b. Current thread owning the lock is RD request and pending request
       //      is RD as well. Both can simultaneously enter the critical region.
-      return ((this->_q_pending.front() == my_th_id) &&
-              ((this->_cur_mode == LockMode::UNLOCK) || 
-               (this->_cur_mode == LockMode::SHARE_LOCK && 
-                mode == LockMode::SHARE_LOCK)));
+      it=this->q_pending_.begin();
+
+      // Exclusive Lock Request:
+      // Accepted only when lock available & my request is head of queue
+      if (myElem.second == LockMode::EXCLUSIVE_LOCK) {
+        return (this->cur_mode_ == LockMode::UNLOCK && 
+                myElem.first == it->first);
+      }
+
+      // Share Lock Request: myElem.second == LockMode::SHARE_LOCK
+      // lock exclusively held? => Deny my request.
+      if (this->cur_mode_ == LockMode::EXCLUSIVE_LOCK)
+        return false;
+
+      // Honor if my request is ahead of any Exclusive Lock request
+      for (;it!=this->q_pending_.end();++it) {
+        // My request is ahead of any exclusive lock request: Accept
+        if (it->first == myElem.first)
+          break;
+        // Exclusive request hit ahead of my request: Deny 
+        if (it->second == LockMode::EXCLUSIVE_LOCK) 
+          return false;
+      }
+      return true;
     });
 
-  FASSERT(this->_q_pending.front() == my_th_id);
-  _q_pending.pop_front();
-  _v_owners.push_back(my_th_id);
+  FASSERT(it != q_pending_.end());
+  q_pending_.erase(it);
+  v_owners_.push_back(myElem.first);
 
   if (mode == LockMode::EXCLUSIVE_LOCK) {
-    FASSERT(this->_num_readers == 0);
-    this->_cur_mode = LockMode::EXCLUSIVE_LOCK;
+    DCHECK_EQ(num_readers_, 0);
+    cur_mode_ = LockMode::EXCLUSIVE_LOCK;
   } else {
-    this->_num_readers++;
-    this->_cur_mode = LockMode::SHARE_LOCK;
+    ++num_readers_;
+    cur_mode_ = LockMode::SHARE_LOCK;
   }
 
   return; 
 }
 
-void rw_mutex::unlock(void) {
+void RWMutex::unlock(void) {
   std::thread::id my_th_id = std::this_thread::get_id();
 
   { // Begin: Critical Region
-    std::lock_guard<std::mutex> lck{_mutex};
-    if (_cur_mode == LockMode::SHARE_LOCK) {
-      FASSERT(_num_readers >= 1);
-      _num_readers--;
-      if (_num_readers == 0)
-        _cur_mode = LockMode::UNLOCK;
+    std::lock_guard<std::mutex> lck{mutex_};
+    if (cur_mode_ == LockMode::SHARE_LOCK) {
+      FASSERT(num_readers_ >= 1);
+      --num_readers_;
+      if (num_readers_ == 0)
+        cur_mode_ = LockMode::UNLOCK;
     } else {
-      _cur_mode = LockMode::UNLOCK;
+      cur_mode_ = LockMode::UNLOCK;
     }
-    std::remove_if(_v_owners.begin(), _v_owners.end(), 
+    std::remove_if(v_owners_.begin(), v_owners_.end(), 
                    [&my_th_id](const std::thread::id& th_id){return (my_th_id == th_id);});
   } // End: Critical Region
 
   // unlocked before notify: avoids unnecessary locking of the woken task
-  _cv.notify_all();
+  cv_.notify_all();
   return;
 }
 
-// TODO bool rw_mutex::try_lock(LockMode mode);
+// TODO bool RWMutex::try_lock(LockMode mode);
 
-std::ostream& operator<<(std::ostream& os, const rw_mutex& rwm) {
-  os << "cur_mode " << rwm._cur_mode
-     << ": num_readers " << rwm._num_readers;
-  os << ": pending threads [ " << std::hex;
-  for (auto &id : rwm._q_pending)
-    os << "0x" << id << " ";
+std::ostream& operator<<(std::ostream& os, const RWMutex& rwm) {
+  os << "cur_mode " << rwm.cur_mode_
+     << ": num_readers " << rwm.num_readers_;
+  os << ": pending_q [ " << std::hex;
+  for (auto &myElem : rwm.q_pending_)
+    os << "{" << std::hex << myElem.first << "," << myElem.second << "} ";
   os << "]";
   os << ": owners [ ";
-  for (auto &id : rwm._v_owners)
+  for (auto &id : rwm.v_owners_)
     os << "0x" << id << " ";
   os << "]";
   return os;

@@ -36,28 +36,21 @@ namespace asarcar { namespace utils { namespace concur {
 
 //! @class    lock_guard
 //! @brief    RAII for lock with shared or exclusive semantics
-//! Behavior undefined if rw_lock_guard is called recursively
-//! Behavior undefined if rw_mutex is destroyed before rw_lock_guard.
-template<typename Mutex>
-class lock_guard
-{
+template<typename Lock>
+class LockGuard {
  public:
-  explicit lock_guard(Mutex& m) : 
-      mutex_(m) { 
-    mutex_.lock();
-  }
-  explicit lock_guard(Mutex& m, LockMode mode) : 
-      mutex_(m) { 
-    mutex_.lock(mode); 
-  }
-  ~lock_guard(void) {mutex_.unlock();}
-  lock_guard(const lock_guard& o)             = delete;
-  lock_guard& operator=(const lock_guard& o)  = delete;
-  lock_guard(lock_guard&& o)                  = delete; 
-  lock_guard& operator=(lock_guard&& o)       = delete;
+  explicit LockGuard(Lock& m): 
+      m_(m) {m_.lock();}
+  explicit LockGuard(Lock& m, LockMode mode): 
+      m_(m) {m_.lock(mode);}
+  ~LockGuard(void) {m_.unlock();}
+  LockGuard(const LockGuard& o)             = delete;
+  LockGuard& operator=(const LockGuard& o)  = delete;
+  LockGuard(LockGuard&& o)                  = delete; 
+  LockGuard& operator=(LockGuard&& o)       = delete;
 
  private:
-  Mutex&              mutex_;
+  Lock&  m_;
 };
 
 //-----------------------------------------------------------------------------

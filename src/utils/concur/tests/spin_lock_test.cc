@@ -58,9 +58,8 @@ class SpinLockTester {
   static constexpr uint32_t kNumLockUnlock = 10000;
 
   SpinLock   sl_{};
-
   std::mutex m_{};   // used only when benchmarking against spinlock
-  rw_mutex   rwm_{}; // used only when benchmarking against spinlock
+  RWMutex    rwm_{}; // used only when benchmarking against spinlock
 
   struct LockFields {
     SpinLock&            sl;
@@ -70,10 +69,10 @@ class SpinLockTester {
     LockMode             child_lock_mode;
   };
   static void LockHelper(LockFields& lf);
-  template <typename Mutex>
-  Clock::TimeDuration LockBenchmarkExclusiveHelper(Mutex &m);
-  template <typename Mutex>
-  Clock::TimeDuration LockBenchmarkShareHelper(Mutex &m);
+  template <typename Lock>
+  Clock::TimeDuration LockBenchmarkExclusiveHelper(Lock &m);
+  template <typename Lock>
+  Clock::TimeDuration LockBenchmarkShareHelper(Lock &m);
 };
 
 constexpr const char* SpinLockTester::kUnitStr;
@@ -92,7 +91,7 @@ SpinLockTester::LockHelper(LockFields& lf) {
   if (lf.try_lock_status)
     lf.sl.unlock();
   {
-    lock_guard<SpinLock> lckg(lf.sl, lf.child_lock_mode);
+    LockGuard<SpinLock> lckg(lf.sl, lf.child_lock_mode);
     lf.duration = Clock::USecs() - lf.start;
     LOG(INFO) << "Child Thread " << std::this_thread::get_id()
               << ": TryLockStatus " << std::boolalpha << lf.try_lock_status
@@ -112,12 +111,13 @@ void SpinLockTester::LockBasicTest() {
     CHECK_EQ(sl_.Mode(), LockMode::UNLOCK);
   }
   {
-    lock_guard<SpinLock> lckg(sl_, LockMode::EXCLUSIVE_LOCK); 
+    LockGuard<SpinLock> lckg(sl_, LockMode::EXCLUSIVE_LOCK); 
     CHECK(!sl_.TryLock());
     CHECK_EQ(sl_.Mode(), LockMode::EXCLUSIVE_LOCK);
   }
   CHECK_EQ(sl_.Mode(), LockMode::UNLOCK);
-  
+
+  LOG(INFO) << __FUNCTION__ << " passed";
   return;
 }
 
@@ -130,7 +130,7 @@ void SpinLockTester::LockExclusiveTest() {
   LockFields lf = {sl_, Clock::USecs(), 0, false, 
                    LockMode::EXCLUSIVE_LOCK};
   {
-    lock_guard<SpinLock> lckg(sl_, LockMode::EXCLUSIVE_LOCK);
+    LockGuard<SpinLock> lckg(sl_, LockMode::EXCLUSIVE_LOCK);
     th = std::thread(SpinLockTester::LockHelper, std::ref(lf));
     // sleep for some time
     std::this_thread::sleep_for(Clock::TimeUSecs(kSleepDuration)); 
@@ -139,6 +139,8 @@ void SpinLockTester::LockExclusiveTest() {
 
   CHECK(!lf.try_lock_status);
   CHECK_GT(lf.duration, kSleepDuration);
+
+  LOG(INFO) << __FUNCTION__ << " passed";
   return;
 }
 
@@ -153,7 +155,7 @@ void SpinLockTester::LockSharedTest() {
     LockFields lf = {sl_, Clock::USecs(), 0, false, 
                      LockMode::SHARE_LOCK};
     {
-      lock_guard<SpinLock> lckg(sl_, LockMode::SHARE_LOCK);
+      LockGuard<SpinLock> lckg(sl_, LockMode::SHARE_LOCK);
       th = std::thread(SpinLockTester::LockHelper, std::ref(lf));
       // sleep for some time
       std::this_thread::sleep_for(Clock::TimeUSecs(kSleepDuration)); 
@@ -166,7 +168,7 @@ void SpinLockTester::LockSharedTest() {
     LockFields lf = {sl_, Clock::USecs(), 0, false, 
                      LockMode::EXCLUSIVE_LOCK};
     {
-      lock_guard<SpinLock> lckg(sl_, LockMode::SHARE_LOCK);
+      LockGuard<SpinLock> lckg(sl_, LockMode::SHARE_LOCK);
       th = std::thread(SpinLockTester::LockHelper, std::ref(lf));
       // sleep for some time
       std::this_thread::sleep_for(Clock::TimeUSecs(kSleepDuration)); 
@@ -180,7 +182,7 @@ void SpinLockTester::LockSharedTest() {
     LockFields lf = {sl_, Clock::USecs(), 0, false, 
                      LockMode::SHARE_LOCK};
     {
-      lock_guard<SpinLock> lckg(sl_, LockMode::EXCLUSIVE_LOCK);
+      LockGuard<SpinLock> lckg(sl_, LockMode::EXCLUSIVE_LOCK);
       th = std::thread(SpinLockTester::LockHelper, std::ref(lf));
       // sleep for some time
       std::this_thread::sleep_for(Clock::TimeUSecs(kSleepDuration)); 
@@ -190,6 +192,8 @@ void SpinLockTester::LockSharedTest() {
     CHECK(!lf.try_lock_status);
     CHECK_GT(lf.duration, kSleepDuration);
   }
+
+  LOG(INFO) << __FUNCTION__ << " passed";
   return;
 }
 
@@ -202,16 +206,16 @@ void SpinLockTester::LockSharedTest() {
 //    fails until parent releases lock
 void SpinLockTester::LockUpgradeTest() {
   {
-    lock_guard<SpinLock> lckg(sl_, LockMode::SHARE_LOCK);
+    LockGuard<SpinLock> lckg(sl_, LockMode::SHARE_LOCK);
     CHECK_EQ(sl_.Mode(), LockMode::SHARE_LOCK);
     CHECK(!sl_.TryLock(LockMode::EXCLUSIVE_LOCK));
     CHECK(sl_.TryUpgrade());
     CHECK_EQ(sl_.Mode(), LockMode::EXCLUSIVE_LOCK);
   }
   {
-    lock_guard<SpinLock> lckg(sl_, LockMode::SHARE_LOCK);
+    LockGuard<SpinLock> lckg(sl_, LockMode::SHARE_LOCK);
     {
-      lock_guard<SpinLock> lckg(sl_, LockMode::SHARE_LOCK);
+      LockGuard<SpinLock> lckg(sl_, LockMode::SHARE_LOCK);
       CHECK(!sl_.TryUpgrade());
     }
     CHECK(sl_.TryUpgrade());
@@ -222,7 +226,7 @@ void SpinLockTester::LockUpgradeTest() {
     LockFields lf = {sl_, Clock::USecs(), 0, false, 
                      LockMode::SHARE_LOCK};
     {
-      lock_guard<SpinLock> lckg(sl_, LockMode::SHARE_LOCK);
+      LockGuard<SpinLock> lckg(sl_, LockMode::SHARE_LOCK);
       CHECK_EQ(sl_.Mode(), LockMode::SHARE_LOCK);
       CHECK(sl_.TryUpgrade());
       CHECK_EQ(sl_.Mode(), LockMode::EXCLUSIVE_LOCK);
@@ -236,6 +240,7 @@ void SpinLockTester::LockUpgradeTest() {
     CHECK_GT(lf.duration, kSleepDuration);
   }
 
+  LOG(INFO) << __FUNCTION__ << " passed";
   return;
 }
 
@@ -244,16 +249,18 @@ void SpinLockTester::LockUpgradeTest() {
 //    Parent Downgrades lock. CHILD Lock succeeds.
 void SpinLockTester::LockDowngradeTest() {
   {
-    lock_guard<SpinLock> lckg(sl_, LockMode::EXCLUSIVE_LOCK);
+    LockGuard<SpinLock> lckg(sl_, LockMode::EXCLUSIVE_LOCK);
     sl_.Downgrade();
     CHECK_EQ(sl_.Mode(), LockMode::SHARE_LOCK);
   }
+  LOG(INFO) << __FUNCTION__ << " basic downgrade exclusive->shared passed";
+
   std::thread th;
   {
     LockFields lf = {sl_, Clock::USecs(), 0, false, 
                      LockMode::SHARE_LOCK};
     {
-      lock_guard<SpinLock> lckg(sl_, LockMode::EXCLUSIVE_LOCK);
+      LockGuard<SpinLock> lckg(sl_, LockMode::EXCLUSIVE_LOCK);
       th = std::thread(SpinLockTester::LockHelper, std::ref(lf));
       // sleep for some time
       std::this_thread::sleep_for(Clock::TimeUSecs(kSleepDuration)); 
@@ -265,14 +272,15 @@ void SpinLockTester::LockDowngradeTest() {
     CHECK_GT(lf.duration, kSleepDuration);
   }
 
+  LOG(INFO) << __FUNCTION__ << " passed";
   return;
 }
 
-template <typename Mutex>
-Clock::TimeDuration SpinLockTester::LockBenchmarkExclusiveHelper(Mutex &m) {
+template <typename Lock>
+Clock::TimeDuration SpinLockTester::LockBenchmarkExclusiveHelper(Lock &m) {
   auto fn = [&m]() {
     for (int i=0; i<kNumLockUnlock; ++i) {
-      lock_guard<Mutex> lckg(m);
+      LockGuard<Lock> lckg(m);
     }
   };
 
@@ -284,11 +292,11 @@ Clock::TimeDuration SpinLockTester::LockBenchmarkExclusiveHelper(Mutex &m) {
   return (Clock::USecs() - now);
 }
 
-template <typename Mutex>
-Clock::TimeDuration SpinLockTester::LockBenchmarkShareHelper(Mutex &m) {
+template <typename Lock>
+Clock::TimeDuration SpinLockTester::LockBenchmarkShareHelper(Lock &m) {
   auto fn = [&m]() {
     for (int i=0; i<kNumLockUnlock; ++i) {
-      lock_guard<Mutex> lckg(m, LockMode::SHARE_LOCK);
+      LockGuard<Lock> lckg(m, LockMode::SHARE_LOCK);
     }
   };
 
@@ -320,7 +328,7 @@ void SpinLockTester::LockBenchmarkTest() {
   durM = LockBenchmarkShareHelper(rwm_);
   durS = LockBenchmarkShareHelper(sl_);
   LOG(INFO) << "Time: " << kNumLockUnlock << " lock/unlock pairs "
-            << "for RW_Mutex/SpinLock = " <<  durM << "/" << durS 
+            << "for RWMutex/SpinLock = " <<  durM << "/" << durS 
             << kUnitStr << ": SpeedUp = " 
             << static_cast<double>(durM)/static_cast<double>(durS);
   

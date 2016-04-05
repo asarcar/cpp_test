@@ -15,6 +15,7 @@
 # Author: Arijit Sarcar <sarcar_a@yahoo.com>
 add_ctest_fn(concur concur_utils)
 add_ctest_fn(concur_q concur_utils)
+add_ctest_fn(cv_guard concur_utils)
 add_ctest_fn(monitor)
 add_ctest_fn(rw_mutex concur_utils)
 add_ctest_fn(server_pool)

@@ -39,6 +39,7 @@
 // Google Headers
 #include <glog/logging.h>   
 // Local Headers
+#include "utils/concur/futex.h"
 #include "utils/concur/lock.h"
 
 //! @addtogroup utils
@@ -63,7 +64,8 @@ class SpinLock {
   static constexpr int EXCLUSIVE_LOCK_VAL    = -1;
   static constexpr int SHARE_DELTA_LOCK_VAL  =  1;
   
-  explicit SpinLock() {};
+  explicit SpinLock(): 
+      val_{UNLOCK_VAL}, f_{&val_}, num_spins_{0} {}
   ~SpinLock() = default;
   // Prevent bad usage: copy and assignment of SpinLock
   SpinLock(const SpinLock&)             = delete;
@@ -89,19 +91,13 @@ class SpinLock {
 
  private:
   // lock state values: UNLOCK, EXCLUSIVE_LOCK, or SHARE_LOCK
-  std::atomic_int val_{0};
-
-
+  std::atomic_int val_;
+  Futex           f_;
   // debug stats: # times we spun before success for the last lock acquired
-  std::atomic_int  num_spins_{0};     
-  // debug stats: # threads waiting to acquire spinlock and busy waiting
-  std::atomic_int  num_waiting_ths_{0};
+  std::atomic_int  num_spins_;     
 
   inline void UpdateLockStats(int num) { 
-    // Comman separated expression returns the value of the last expression:
-    // (a, b) returns b. We used this method to ensure num_spins_ (debug stats)
-    // is only updated when NDEBUG is turned on.
-    DCHECK_GT((num_spins_.store(num), num), 0); 
+    DCHECK_GT(num_spins_ = num, 0); 
   }
 };
 

@@ -185,7 +185,7 @@ void ConcurTester::AdvancedTest(void) {
               return acc;
             };
             futs.at(th_num) = std::move(cc(fn));
-            ai_.fetch_add(fn(c));
+            ai_ += fn(c);
           });
       ++th_num;
     }

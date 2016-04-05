@@ -208,11 +208,11 @@ void ConcurQTester<ElemSize>::HelperStressTest(QueueType& q) {
     ths[i] = std::thread([this, val_expected, &q](std::atomic_int& v){
         // loop until all the numbers produced are not consumed
         for(;;) {
-          int v_acc = v.load();
+          int v_acc = v;
           typename Elem::ElemValueType p = q.TryPop();
           CHECK_LE(v_acc, val_expected);
           if (!Elem::Equal(p, 0)) {
-            v.fetch_add(Elem::Get(p));
+            v += Elem::Get(p);
           } else if (v_acc == val_expected) {
             return;
           }
@@ -224,7 +224,7 @@ void ConcurQTester<ElemSize>::HelperStressTest(QueueType& q) {
   for (int i=0; i<NumProducers+NumConsumers;++i)
     ths[i].join();
 
-  CHECK_EQ(val.load(), val_expected);
+  CHECK_EQ(val, val_expected);
 }
 
 // Low# producers produce numbers from 1 to Low# of Elems

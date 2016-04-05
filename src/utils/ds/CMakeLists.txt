@@ -17,7 +17,7 @@
 ######################################
 #           SubDirectories           #
 ######################################
-add_library(ds_utils string_prefix.cc)
+add_library(ds_utils radix_trie.cc string_prefix.cc)
 target_link_libraries(ds_utils basic_utils)
 
 if (CMAKE_CUSTOM_UNIT_TESTS)

@@ -35,10 +35,10 @@ namespace asarcar { namespace utils { namespace misc {
 //
 // Syntactic sugar to help bind integer ranges [i,i+k) args to functions
 // 
-//   int fn_orig(t1 arg1, ..., th argh, ti argi, ..., t(i+k) argj, ..., tN argN);
+//   int fn_orig(t1 arg1,..., th argh, ti argi,..., t(i+k) argj,...,tN argN);
 // 
 //   function<int(t1, ..., th, t(i+k), ..., tN)> fn_new = 
-//     fn_bind(fn_new, i, argi, ..., arg(i+k-1));
+//     fn_bind(fn_orig, i, argi, ..., arg(i+k-1));
 // 
 //   fn_new(arg1, ..., argh, arg(i+k), ..., argN) calls 
 //     fn_orig(arg1, ..., argN)
@@ -46,7 +46,8 @@ namespace asarcar { namespace utils { namespace misc {
 // Default arguments to fn_bind: i=1
 // 
 
-// Range<i, i+1, ..., i+k-1> = RangeFactory<i, k>::type;
+// Range<1,2,...,k> = BasicRangeBindor<1, k>::type
+// Range<i+1, i+2, ..., i+k>=NewRangeBindor<i,k>::type;
 template <int... Args>
 struct Range {
 };
@@ -85,8 +86,9 @@ struct RangeBindor <First, Num, 0, Val, Args...> {
 template<int Num>
 using BasicRangeBindor=typename RangeBindor<1,Num,Num,Num>::type;
 
+// Range<Base, Base+1,..., Base+Num-1> i.e. [i,i+k)
 template <int Base, int Num>
-using NewRangeBindor=typename RangeBindor<Base+1, Num, Num, Base+Num>::type;
+using GenericRangeBindor=typename RangeBindor<Base, Num, Num, Base+Num-1>::type;
 
 //-----------------------------------------------------------------------------
 } } } // namespace asarcar { namespace utils { namespace misc {
