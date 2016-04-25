@@ -13,5 +13,5 @@
 # limitations under the License.
 
 # Author: Arijit Sarcar <sarcar_a@yahoo.com>
-add_test_fn(msgq)
-add_test_fn(msgq_pt)
+add_test_fn(msgq concur_utils)
+add_test_fn(msgq_pt concur_utils)

@@ -22,7 +22,8 @@
 #define _UTILS_BASIC_CLOCK_H_
 
 // C++ Standard Headers
-#include <chrono>               // std::chrono::system_clock
+#include <limits>       // std::numeric_limits<>::max()
+#include <chrono>       // std::chrono::system_clock
 #include <iostream>
 // C Standard Headers
 // Google Headers
@@ -51,6 +52,9 @@ class Clock {
   static inline TimePoint Secs(void) {
     return std::chrono::duration_cast<TimeSecs>
         (std::chrono::system_clock::now().time_since_epoch()).count();
+  }
+  static inline TimeDuration MaxDuration() {
+    return std::numeric_limits<TimeDuration>::max();
   }
  private:
 };

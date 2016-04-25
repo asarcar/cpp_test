@@ -22,12 +22,12 @@
 //!         semantics on any lock. Assumptions & generic workflow:
 //! //------------------------------------------------------------------------
 //! Code Sample:
-//! LockType lck; 
-//! CondVar<LockType> cv{lck, mode};
+//! CV<LockType,LockMode> cv;
 //! //------------------------------------------------------------------------
 //! // 1. WAITER(s) waits on condition variable while some condition is false
 //! {
-//!   CV::WaitGuard cv{lck, cv, Predicate, mode};
+//!   CV::WaitGuard cv{cv, Predicate}; 
+//!   // ... 
 //!   // ... code executed when lock acquired and Predicate() is true
 //!   // ... post code execution Predicate may or may not be updated
 //! }
@@ -83,8 +83,8 @@
 // Google Headers
 #include <glog/logging.h>   
 // Local Headers
+#include "utils/basic/clock.h"
 #include "utils/basic/meta.h"
-#include "utils/concur/cv_guard.h"
 #include "utils/concur/futex.h"
 #include "utils/concur/lock.h"
 #include "utils/concur/lock_guard.h"
@@ -104,21 +104,31 @@ class CV {
   CV& operator=(const CV& o)  = delete;
   CV(CV&& o)                  = delete; 
   CV& operator=(CV&& o)       = delete;
-  inline void xlock(void) { lck_.lock(); }
-  template<LockMode nMode = Mode>
+  inline void xlock(void) {lck_.lock();}
+  template<LockMode nMode=Mode>
   inline EnableIf<nMode==LockMode::EXCLUSIVE_LOCK, void> lock(void) {xlock();}
-  template<LockMode nMode = Mode>
-  inline EnableIf<nMode==LockMode::SHARE_LOCK, void> lock(void) { 
-    lck_.lock(Mode); 
-  }
-  inline void unlock(void) { lck_.unlock(); }
+  template<LockMode nMode=Mode>
+  inline EnableIf<nMode==LockMode::SHARE_LOCK, void>lock(void){lck_.lock(Mode);}
+  inline void unlock(void) {lck_.unlock();}
 
   class WaitGuard {
    public:
     friend class CV;
+    // extra-args: 
+    // wait_msecs: 0 when waiting not allowed: abort if predicate false
+    //             MaxDuration() wait indefinitely until predicate true
+    // success: false when pred failed and we aborted due to timeout
     template <typename Predicate>
-    explicit WaitGuard(CV<Lock,Mode>& cv, Predicate pred); 
+    explicit WaitGuard(CV<Lock,Mode>& cv, Predicate pred, 
+                       const Clock::TimeDuration wait_msecs, 
+                       bool* success_p);
+
+    template <typename Predicate>
+    explicit WaitGuard(CV<Lock,Mode>& cv, Predicate pred) : 
+        WaitGuard{cv, pred, Clock::MaxDuration(), nullptr} {}
+ 
     ~WaitGuard(void) { cv_.unlock(); }
+
    private:
     CV<Lock,Mode>& cv_;
   };
@@ -147,9 +157,19 @@ class CV {
 template <typename Lock, LockMode Mode>
 template <typename Predicate>
 CV<Lock,Mode>::
-WaitGuard::WaitGuard(CV<Lock,Mode>& cv, Predicate pred):cv_(cv) {
+WaitGuard::WaitGuard(CV<Lock,Mode>& cv, Predicate pred, 
+                     const Clock::TimeDuration wait_msecs, 
+                     bool* success_p) : cv_(cv) {
+  Clock::TimePoint begin_msecs = Clock::MSecs();
+  bool success; 
+  success_p = (success_p == nullptr) ? &success : success_p;
+  *success_p = false;
+
   cv_.lock();
   while(!pred()) { 
+    // if wait time is bounded then quit if time exceeded 
+    if (wait_msecs == 0 || (Clock::MSecs() - begin_msecs) > wait_msecs)
+      return;
     // Atomic operation (enforced via mutex): wait on cond & release mutex
     { 
       std::unique_lock<std::mutex> lkg{cv_.m_}; 
@@ -158,6 +178,9 @@ WaitGuard::WaitGuard(CV<Lock,Mode>& cv, Predicate pred):cv_(cv) {
     }
     cv_.lock(); // wake signal - first acquire lock in same mode
   }
+
+  *success_p = true;
+  return;
 }
 
 template <typename Lock, LockMode Mode>

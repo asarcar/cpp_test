@@ -27,13 +27,14 @@
 //! @author Arijit Sarcar <sarcar_a@yahoo.com>
 
 // C++ Standard Headers
-#include <mutex>                // std::mutex
 #include <memory>               // std::unique_ptr
-#include <condition_variable>   // std::condition_variable
 // C Standard Headers
 // Google Headers
 #include <glog/logging.h>   
 // Local Headers
+#include "utils/concur/cv_guard.h"  // CV::WaitGuard & SignalGuard
+#include "utils/concur/spin_lock.h" // SpinLock
+#include "utils/basic/clock.h"      // Clock::MaxDuration()
 #include "utils/basic/meta.h"       // Conditional
 #include "utils/basic/proc_info.h"  // CACHE_LINE_SIZE
 
@@ -61,7 +62,7 @@ class ConcurBlockQ {
   };
   
  public:
-  ConcurBlockQ(): m_{}, cv_{} {
+  ConcurBlockQ() {
     // create sentinel object
     head_ = tail_ = new Node(NodeValueType{});
   }
@@ -76,13 +77,9 @@ class ConcurBlockQ {
 
   void Push(NodeValueType&& val) {
     Node* np = new Node(std::move(val));
-    {
-      std::lock_guard<std::mutex> _{m_};
-      tail_->next_ = np;
-      tail_        = np;
-    }
-    // first unlock then notify to avoid spurious wakeup
-    cv_.notify_one();
+    CV<SpinLock>::SignalGuard cvs_g{cv_};
+    tail_->next_ = np;
+    tail_        = np;
   }
 
   NodeValueType TryPop(void) {
@@ -94,20 +91,20 @@ class ConcurBlockQ {
   }
 
  private:
-  std::mutex              m_;
-  std::condition_variable cv_;
+  CV<SpinLock>            cv_;
   Node*                   head_;
   Node*                   tail_;
 
   NodeValueType HelperPop(bool non_blocking) {
-    Node*         prev_head;
+    bool          success   = false;
+    Node*         prev_head = nullptr;
     NodeValueType val{};
     {
-      // protect all consumers from critical region
-      std::unique_lock<std::mutex> lk{m_};
-      if (non_blocking && (head_->next_ == nullptr))
+      CV<SpinLock>::WaitGuard 
+          cvw_g{cv_, [this]{return head_->next_!=nullptr;}, 
+            non_blocking ? 0 : Clock::MaxDuration(), &success};
+      if (!success) // non_block case & predicate failed: head_->next==nullptr
         return val;
-      cv_.wait(lk, [this]{return head_->next_ != nullptr;});
       prev_head = head_;
       head_ = head_->next_;
       Swap(val, head_->val_); 
