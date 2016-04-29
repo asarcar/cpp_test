@@ -86,7 +86,7 @@ void RWMutex::lock(LockMode mode) {
 
   FASSERT(it != q_pending_.end());
   q_pending_.erase(it);
-  v_owners_.push_back(myElem.first);
+  owners_.emplace_back(myElem.first);
 
   if (mode == LockMode::EXCLUSIVE_LOCK) {
     DCHECK_EQ(num_readers_, 0);
@@ -112,7 +112,7 @@ void RWMutex::unlock(void) {
     } else {
       cur_mode_ = LockMode::UNLOCK;
     }
-    std::remove_if(v_owners_.begin(), v_owners_.end(), 
+    std::remove_if(owners_.begin(), owners_.end(), 
                    [&my_th_id](const std::thread::id& th_id){return (my_th_id == th_id);});
   } // End: Critical Region
 
@@ -131,7 +131,7 @@ std::ostream& operator<<(std::ostream& os, const RWMutex& rwm) {
     os << "{" << std::hex << myElem.first << "," << myElem.second << "} ";
   os << "]";
   os << ": owners [ ";
-  for (auto &id : rwm.v_owners_)
+  for (const auto& id : rwm.owners_)
     os << "0x" << id << " ";
   os << "]";
   return os;

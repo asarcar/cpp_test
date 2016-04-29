@@ -46,18 +46,20 @@
 
 static constexpr int kNumThreads  = 3;
 
- template<typename Lock, LockMode Mode=LockMode::EXCLUSIVE_LOCK>
- class CvGuardTester {
-  public:
-   CvGuardTester()  = default;
-   ~CvGuardTester() = default;
-   // Case 1: Wait precedes signal
-   void WaitTest(void) {
-     Clock::TimePoint now = Clock::MSecs();
-     std::atomic_bool cond{false};
-     std::atomic_int  count{0};
-     std::thread tid = std::thread([this, &cond, &count]() {
-         // introduce Delay to allow waiter to proceed first
+template<typename Lock, LockMode Mode=LockMode::EXCLUSIVE_LOCK>
+struct CvGuardTester {
+  Lock             lck;
+  CV<Lock,Mode>    cv;
+
+  CvGuardTester() : lck{}, cv{lck} {}
+  ~CvGuardTester() = default;
+  // Case 1: Wait precedes signal
+  void WaitTest(void) {
+    Clock::TimePoint now = Clock::MSecs();
+    std::atomic_bool cond{false};
+    std::atomic_int  count{0};
+    std::thread tid = std::thread([this, &cond, &count]() {
+        // introduce Delay to allow waiter to proceed first
          std::this_thread::sleep_for(Clock::TimeMSecs(kDelayMSecs)); 
          ++count;
          {
@@ -68,96 +70,93 @@ static constexpr int kNumThreads  = 3;
          }
          std::this_thread::sleep_for(Clock::TimeMSecs(kDelayMSecs)); 
          ++count;
-       });
-     CHECK_EQ(count, 0);
-     typename CV<Lock,Mode>::WaitGuard wg{cv, [&cond](){return cond.load();}};
-     CHECK_EQ(count, 2);
-     Clock::TimeDuration elapsed1 = Clock::MSecs() - now;
-     CHECK_GE(elapsed1, kSleepNDelayMSecs);
-     CHECK_LE(elapsed1, kSleepN2DelayMSecs);
-     tid.join();
-     CHECK_EQ(count, 3);
-     Clock::TimeDuration elapsed2 = Clock::MSecs() - now;
-     CHECK_GE(elapsed2, kSleepN2DelayMSecs);
-     CHECK_LE(elapsed2, kSleepN3DelayMSecs);
-   }
-   // Case 2: Signal precedes Wait
-   void NotifyTest(void) {
-     Clock::TimePoint now = Clock::MSecs();
-     std::atomic_bool cond{false};
-     std::atomic_int  count{0};
-     std::thread tid = std::thread([this, &cond, &count]() {
-         ++count;
-         {
-           typename CV<Lock,Mode>::SignalGuard sg{cv};
+      });
+    CHECK_EQ(count, 0);
+    typename CV<Lock,Mode>::WaitGuard wg{cv, [&cond](){return cond.load();}};
+    CHECK_EQ(count, 2);
+    Clock::TimeDuration elapsed1 = Clock::MSecs() - now;
+    CHECK_GE(elapsed1, kSleepNDelayMSecs);
+    CHECK_LE(elapsed1, kSleepN2DelayMSecs);
+    tid.join();
+    CHECK_EQ(count, 3);
+    Clock::TimeDuration elapsed2 = Clock::MSecs() - now;
+    CHECK_GE(elapsed2, kSleepN2DelayMSecs);
+    CHECK_LE(elapsed2, kSleepN3DelayMSecs);
+  }
+  // Case 2: Signal precedes Wait
+  void NotifyTest(void) {
+    Clock::TimePoint now = Clock::MSecs();
+    std::atomic_bool cond{false};
+    std::atomic_int  count{0};
+    std::thread tid = std::thread([this, &cond, &count]() {
+        ++count;
+        {
+          typename CV<Lock,Mode>::SignalGuard sg{cv};
            cond = true;
            ++count;
-         }
-         std::this_thread::sleep_for(Clock::TimeMSecs(kSleepMSecs));
-         ++count;
-       });
-     // introduce Delay to allow Signal to proceed first
-     std::this_thread::sleep_for(Clock::TimeMSecs(kDelayMSecs)); 
-     CHECK_EQ(count, 2);
-     typename CV<Lock,Mode>::WaitGuard wg{cv, [&cond](){return cond.load();}};
-     CHECK_EQ(count, 2);
-     Clock::TimeDuration elapsed1 = Clock::MSecs() - now;
-     CHECK_GE(elapsed1, kDelayMSecs);
-     CHECK_LE(elapsed1, k2DelayMSecs);
-     tid.join();
-     CHECK_EQ(count, 3);
-     Clock::TimeDuration elapsed2 = Clock::MSecs() - now;
-     CHECK_GE(elapsed2, std::max(kSleepMSecs, kDelayMSecs));
-     CHECK_LE(elapsed2, kSleepNDelayMSecs);
-   }
-
-   // Case 3: Many Waiters wait simultaneously. 
-   //         Signallers {uni/broad}cast to Waiters
-   void NotifyAllTest(void) {
-     std::atomic_bool cond{false};
-     std::atomic_int  prewaiters{0}, waiters{0};
-     auto signal_fn = [this, &cond](bool broadcast) {
-       typename CV<Lock,Mode>::SignalGuard sg{cv, broadcast};
+        }
+        std::this_thread::sleep_for(Clock::TimeMSecs(kSleepMSecs));
+        ++count;
+      });
+    // introduce Delay to allow Signal to proceed first
+    std::this_thread::sleep_for(Clock::TimeMSecs(kDelayMSecs)); 
+    CHECK_EQ(count, 2);
+    typename CV<Lock,Mode>::WaitGuard wg{cv, [&cond](){return cond.load();}};
+    CHECK_EQ(count, 2);
+    Clock::TimeDuration elapsed1 = Clock::MSecs() - now;
+    CHECK_GE(elapsed1, kDelayMSecs);
+    CHECK_LE(elapsed1, k2DelayMSecs);
+    tid.join();
+    CHECK_EQ(count, 3);
+    Clock::TimeDuration elapsed2 = Clock::MSecs() - now;
+    CHECK_GE(elapsed2, std::max(kSleepMSecs, kDelayMSecs));
+    CHECK_LE(elapsed2, kSleepNDelayMSecs);
+  }
+  
+  // Case 3: Many Waiters wait simultaneously. 
+  //         Signallers {uni/broad}cast to Waiters
+  void NotifyAllTest(void) {
+    std::atomic_bool cond{false};
+    std::atomic_int  prewaiters{0}, waiters{0};
+    auto signal_fn = [this, &cond](bool broadcast) {
+      typename CV<Lock,Mode>::SignalGuard sg{cv, broadcast};
        cond = true;
-     }; 
-     auto wait_fn = [this, &cond, &prewaiters, &waiters](int i) {
-       ++prewaiters;
-       typename CV<Lock,Mode>::WaitGuard wg{cv, [&cond](){return cond.load();}};
+    }; 
+    auto wait_fn = [this, &cond, &prewaiters, &waiters](int i) {
+      ++prewaiters;
+      typename CV<Lock,Mode>::WaitGuard wg{cv, [&cond](){return cond.load();}};
        ++waiters;
-     };
-
-     // When signal is not broadcast then only one waiter is allowed to proceed
-     array<thread, kNumThreads> th_id;
-     for (int i=0; i<kNumThreads; ++i)
+    };
+    
+    // When signal is not broadcast then only one waiter is allowed to proceed
+    array<thread, kNumThreads> th_id;
+    for (int i=0; i<kNumThreads; ++i)
+      th_id.at(i) = thread(wait_fn, i);
+    // allow waiters time to proceed first
+    this_thread::sleep_for(Clock::TimeMSecs(kDelayMSecs)); 
+    CHECK_EQ(prewaiters, kNumThreads); // validate all threads are waiting
+    CHECK_EQ(waiters, 0); // validate all threads are waiting
+    signal_fn(false);
+    // unicast signal: allow time to wake one waiter
+    this_thread::sleep_for(Clock::TimeMSecs(kDelayMSecs)); 
+    CHECK_EQ(waiters, 1); // check only one waiter proceeded
+    // bcast signal: allow time to wake remaining waiters
+    signal_fn(true);
+    this_thread::sleep_for(Clock::TimeMSecs(kDelayMSecs)); 
+    CHECK_EQ(waiters, kNumThreads); // validate all threads proceeded
+    for (int i=0; i<kNumThreads; ++i) 
+      th_id.at(i).join();
+    
+    // Now that the cond is true: check waiters proceed without any signal
+    for (int i=0; i<kNumThreads; ++i)
        th_id.at(i) = thread(wait_fn, i);
-     // allow waiters time to proceed first
-     this_thread::sleep_for(Clock::TimeMSecs(kDelayMSecs)); 
-     CHECK_EQ(prewaiters, kNumThreads); // validate all threads are waiting
-     CHECK_EQ(waiters, 0); // validate all threads are waiting
-     signal_fn(false);
-     // unicast signal: allow time to wake one waiter
-     this_thread::sleep_for(Clock::TimeMSecs(kDelayMSecs)); 
-     CHECK_EQ(waiters, 1); // check only one waiter proceeded
-     // bcast signal: allow time to wake remaining waiters
-     signal_fn(true);
-     this_thread::sleep_for(Clock::TimeMSecs(kDelayMSecs)); 
-     CHECK_EQ(waiters, kNumThreads); // validate all threads proceeded
-     for (int i=0; i<kNumThreads; ++i) 
-       th_id.at(i).join();
-
-     // Now that the cond is true: check waiters proceed without any signal
-     for (int i=0; i<kNumThreads; ++i)
-       th_id.at(i) = thread(wait_fn, i);
-     // allow time for waiter threads to spawn
-     this_thread::sleep_for(Clock::TimeMSecs(kDelayMSecs)); 
-     CHECK_EQ(prewaiters, 2*kNumThreads);
-     CHECK_EQ(waiters, 2*kNumThreads);
-     for (int i=0; i<kNumThreads; ++i) 
-       th_id.at(i).join();
-   }
-   
-   CV<Lock,Mode>    cv;
-  private:
+    // allow time for waiter threads to spawn
+    this_thread::sleep_for(Clock::TimeMSecs(kDelayMSecs)); 
+    CHECK_EQ(prewaiters, 2*kNumThreads);
+    CHECK_EQ(waiters, 2*kNumThreads);
+    for (int i=0; i<kNumThreads; ++i) 
+      th_id.at(i).join();
+  }  
 };
 
 int main(int argc, char *argv[]) {

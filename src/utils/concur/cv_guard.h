@@ -22,7 +22,8 @@
 //!         semantics on any lock. Assumptions & generic workflow:
 //! //------------------------------------------------------------------------
 //! Code Sample:
-//! CV<LockType,LockMode> cv;
+//! LockType lck;
+//! CV<LockType,LockMode> cv{&lck};
 //! //------------------------------------------------------------------------
 //! // 1. WAITER(s) waits on condition variable while some condition is false
 //! {
@@ -35,13 +36,13 @@
 //! {
 //!    lck.lock(mode); // mode == EXCLUSIVE_LOCK or SHARE_LOCK
 //!    // Mesa (not Hoare) semantics requires testing in while loop
-//!    // 1. If signaller acquires the lck_ first then waiters
+//!    // 1. If signaller acquires the lc first then waiters
 //!    // may receive a receive a spurious wake signal i.e. 
 //!    // although predicate not satisfied as signal message 
-//!    // is made by signaller after unlocking lck_.
+//!    // is made by signaller after unlocking lck.
 //!    // while loop ensures that Mesa semantics works.
 //!    // 2. The lock/unlock mutex around wait ensures that if waiter thread 
-//!    // acquires lck_ first then it blocks and receives signal from signaller
+//!    // acquires lck first then it blocks and receives signal from signaller
 //!    while(!Predicate()) { 
 //!      cv.wait() & lck.unlock(); // atomic unlock & wait until cv signalled
 //!      // lock *always* acquired in same mode. multiple readers may wait
@@ -98,7 +99,7 @@ namespace asarcar { namespace utils { namespace concur {
 template <typename Lock, LockMode Mode=LockMode::EXCLUSIVE_LOCK>
 class CV {
  public:
-  CV(void)                    = default;
+  explicit CV(Lock& lck): lck_(lck) {}
   ~CV(void)                   = default;
   CV(const CV& o)             = delete;
   CV& operator=(const CV& o)  = delete;
@@ -149,7 +150,7 @@ class CV {
   };
 
  private:
-  Lock                    lck_;
+  Lock&                   lck_;
   std::mutex              m_;
   std::condition_variable cond_;
 };

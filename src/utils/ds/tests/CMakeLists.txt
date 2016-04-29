@@ -13,6 +13,7 @@
 # limitations under the License.
 
 # Author: Arijit Sarcar <sarcar_a@yahoo.com>
+add_ctest_fn(elist)
 add_ctest_fn(radix_trie ds_utils nwk_utils)
 add_ctest_fn(skip_lists)
 add_ctest_fn(string_prefix ds_utils)

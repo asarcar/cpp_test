@@ -62,7 +62,7 @@ class ConcurBlockQ {
   };
   
  public:
-  ConcurBlockQ() {
+  ConcurBlockQ() : sl_{}, cv_{sl_} {
     // create sentinel object
     head_ = tail_ = new Node(NodeValueType{});
   }
@@ -91,6 +91,7 @@ class ConcurBlockQ {
   }
 
  private:
+  SpinLock                sl_;
   CV<SpinLock>            cv_;
   Node*                   head_;
   Node*                   tail_;

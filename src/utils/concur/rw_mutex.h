@@ -32,12 +32,15 @@
 #include "utils/basic/basictypes.h"
 #include "utils/basic/fassert.h"
 #include "utils/concur/lock.h"
+#include "utils/ds/elist.h"
 
 //! @addtogroup utils
 //! @{
 
 namespace asarcar { namespace utils { namespace concur {
 //-----------------------------------------------------------------------------
+
+namespace ds = ::asarcar::utils::ds;
 
 //! @class    RWMutex
 //! @brief    Supports multiple readers and single writer
@@ -61,12 +64,7 @@ class RWMutex {
  private:
   std::condition_variable       cv_{};
   std::mutex                    mutex_{};
-  // vector of all threads owning this lock
-  // one may argue this should be a list for 
-  // each insertion and deletion. benchmark shows that
-  // vector exhibits better performance due to memory locality 
-  // for small (<10K) number of elements
-  std::vector<std::thread::id>  v_owners_{};
+  ds::Elist<std::thread::id>    owners_{};
   // deque is implemented as a chunks of blocks/arrays
   std::deque<QElem>             q_pending_{}; 
   LockMode                      cur_mode_{LockMode::UNLOCK};
