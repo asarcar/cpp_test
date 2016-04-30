@@ -15,7 +15,8 @@
 // Author: Arijit Sarcar <sarcar_a@yahoo.com>
 
 // Standard C++ Headers
-#include <thread>
+#include <future>      // std::packaged_task
+#include <thread>      // thread::id
 // Standard C Headers
 // Google Headers
 #include <glog/logging.h>   
@@ -27,11 +28,12 @@
 #include "utils/ds/elist.h"
 
 using namespace std;
-using namespace ::asarcar::utils::ds;
+using namespace asarcar::utils::ds;
 
 namespace asarcar { namespace utils { namespace concur {
 //-----------------------------------------------------------------------------
-struct CbMgr::CbState {
+template <typename F>
+struct CbMgr<F>::CbState {
   using Ptr = shared_ptr<CbState>;
   struct CbTrack; // Forward Declaration
   using CbElem = pair<thread::id, vector<CbTrack*>>;
@@ -55,7 +57,8 @@ struct CbMgr::CbState {
 //--------------------------------------------------
 //-- CbMgr::CbState::CbTrack Definition & Methods --
 //--------------------------------------------------
-struct CbMgr::CbState::CbTrack {
+template <typename F>
+struct CbMgr<F>::CbState::CbTrack {
   explicit CbTrack(CbMgr::CbState* cb_p) : state_p{cb_p} {
     thread::id my_tid = this_thread::get_id();
     LockGuard<SpinLock> lkg{state_p->sl};
@@ -78,8 +81,8 @@ struct CbMgr::CbState::CbTrack {
     DCHECK_EQ(it->second.back(), this);
     --state_p->cbs_num;
     if (it->second.size() == 1) {
-    state_p->elist.erase(it);
-    return;
+      state_p->elist.erase(it);
+      return;
     }
     it->second.pop_back();
     return;
@@ -91,16 +94,19 @@ struct CbMgr::CbState::CbTrack {
 //-------------------
 //-- CbMgr Methods --
 //-------------------
-CbMgr::CbMgr(): cb_p_{make_shared<CbState>()} {}
+template <typename F>
+CbMgr<F>::CbMgr(): cb_p_{make_shared<CbState>()} {}
 
-void CbMgr::SealedCb(CbStatePtr& cb_p, const Closure& naked_cb) {
+template <typename F>
+void CbMgr<F>::SealedCb(CbStatePtr& cb_p, const F& naked_cb) {
   if (cb_p->quash)
     return;
-  CbState::CbTrack cbt{cb_p.get()};
+  typename CbState::CbTrack cbt{cb_p.get()};
   naked_cb();
 }
 
-void CbMgr::QuashNWait(const char* file_name, int line_num) {
+template <typename F>
+void CbMgr<F>::QuashNWait(const char* file_name, int line_num) {
   // memory_order is sequential_consistent
   cb_p_->quash = true; 
   Clock::TimePoint begin = Clock::USecs();
@@ -109,19 +115,30 @@ void CbMgr::QuashNWait(const char* file_name, int line_num) {
   int my_cbs = cb_p_->PendingCbs(&tot_cbs); 
   {
     CV<SpinLock>::WaitGuard{cb_p_->cv,
-          [this,my_cbs](){return my_cbs==cb_p_->cbs_num;}};
+          [this,my_cbs,file_name,line_num](){
+        DLOG(INFO)      
+            << "Thread " << hex << this_thread::get_id()
+            << ": (" << file_name << "," << line_num << ")"
+            << ": TotalCBs is " << cb_p_->cbs_num
+            << ": MyCBs is " << my_cbs << " waiting...";
+        return my_cbs==cb_p_->cbs_num;
+      }};
   }
-  DLOG(INFO) << __FUNCTION__ << ": Total CBs=" << tot_cbs
-             << ": My CBs=" << my_cbs 
-             << " pending in current thread - waited for " 
-             << Clock::USecs() - begin 
-             << " usecs to complete pending callbacks in other threads.";
+  Clock::TimeDuration dur = Clock::USecs() - begin;
+  LOG_IF(WARNING, dur > 1000) 
+      << "Thread " << hex << this_thread::get_id()
+      << ": (" << file_name << "," << line_num << ")"
+      << ": TotalCBs was " << tot_cbs
+      << ": MyCBs is " << my_cbs 
+      << " waited for " << dec << dur
+      << " usecs to complete pending callbacks in other threads.";
 }
 
 //----------------------------
 //-- CbMgr::CbState Methods --
 //----------------------------
-int CbMgr::CbState::PendingCbs(int *tot_cbs_p) {
+template <typename F>
+int CbMgr<F>::CbState::PendingCbs(int *tot_cbs_p) {
   thread::id my_tid = this_thread::get_id();
   LockGuard<SpinLock> lkg{sl};
   *tot_cbs_p = cbs_num;
@@ -129,5 +146,8 @@ int CbMgr::CbState::PendingCbs(int *tot_cbs_p) {
   return (it == elist.end()) ? 0: it->second.size();
 }
 
+//-----------------------------------------------------------------------------
+// Instantiate Templates for Function
+template class CbMgr<function<void(void)>>;
 //-----------------------------------------------------------------------------
 } } } // namespace asarcar { namespace utils { namespace concur {

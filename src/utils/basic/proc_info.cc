@@ -21,6 +21,7 @@
 #include <fstream>          // std::ifstream & std::ofstream
 #include <iostream>
 #include <sstream>          // std::stringstream
+#include <thread>           // std::thread::hardware_concurrency()
 // C Standard Headers
 // Google Headers
 #include <glog/logging.h>   // Daemon Log function
@@ -63,6 +64,8 @@ ProcInfo::ProcInfo() : num_cores_{0}, flags_{}, cache_line_size_{0} {
       line.erase(0, pos+1);
     }
   }
+  // Num Cores
+  FASSERT(num_cores_ == static_cast<int>(thread::hardware_concurrency()));
 
   // Cache Line Size
   std::ifstream sysfile;

@@ -44,7 +44,7 @@
 //! Namespace used for all concurrency utility routines
 namespace asarcar { namespace utils { namespace concur {
 //-----------------------------------------------------------------------------
-template <typename ValueType>
+template <typename ValueType, typename LockType = SpinLock>
 class ConcurBlockQ {
  public:
   using ValueTypePtr  = std::unique_ptr<ValueType>;
@@ -77,7 +77,7 @@ class ConcurBlockQ {
 
   void Push(NodeValueType&& val) {
     Node* np = new Node(std::move(val));
-    CV<SpinLock>::SignalGuard cvs_g{cv_};
+    CvSg<> cvs_g{cv_};
     tail_->next_ = np;
     tail_        = np;
   }
@@ -91,8 +91,8 @@ class ConcurBlockQ {
   }
 
  private:
-  SpinLock                sl_;
-  CV<SpinLock>            cv_;
+  LockType                sl_;
+  CV<LockType>            cv_;
   Node*                   head_;
   Node*                   tail_;
 
@@ -101,8 +101,7 @@ class ConcurBlockQ {
     Node*         prev_head = nullptr;
     NodeValueType val{};
     {
-      CV<SpinLock>::WaitGuard 
-          cvw_g{cv_, [this]{return head_->next_!=nullptr;}, 
+      CvWg<> cvw_g{cv_, [this]{return head_->next_!=nullptr;}, 
             non_blocking ? 0 : Clock::MaxDuration(), &success};
       if (!success) // non_block case & predicate failed: head_->next==nullptr
         return val;

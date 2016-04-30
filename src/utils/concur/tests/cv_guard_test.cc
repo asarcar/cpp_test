@@ -63,7 +63,7 @@ struct CvGuardTester {
          std::this_thread::sleep_for(Clock::TimeMSecs(kDelayMSecs)); 
          ++count;
          {
-           typename CV<Lock,Mode>::SignalGuard sg{cv};
+           CvSg<Lock,Mode> sg{cv};
            cond = true;
            std::this_thread::sleep_for(Clock::TimeMSecs(kSleepMSecs));
            ++count;
@@ -72,7 +72,7 @@ struct CvGuardTester {
          ++count;
       });
     CHECK_EQ(count, 0);
-    typename CV<Lock,Mode>::WaitGuard wg{cv, [&cond](){return cond.load();}};
+    CvWg<Lock,Mode> wg{cv, [&cond](){return cond.load();}};
     CHECK_EQ(count, 2);
     Clock::TimeDuration elapsed1 = Clock::MSecs() - now;
     CHECK_GE(elapsed1, kSleepNDelayMSecs);
@@ -83,6 +83,7 @@ struct CvGuardTester {
     CHECK_GE(elapsed2, kSleepN2DelayMSecs);
     CHECK_LE(elapsed2, kSleepN3DelayMSecs);
   }
+
   // Case 2: Signal precedes Wait
   void NotifyTest(void) {
     Clock::TimePoint now = Clock::MSecs();
@@ -91,9 +92,9 @@ struct CvGuardTester {
     std::thread tid = std::thread([this, &cond, &count]() {
         ++count;
         {
-          typename CV<Lock,Mode>::SignalGuard sg{cv};
-           cond = true;
-           ++count;
+          CvSg<Lock,Mode> sg{cv};
+          cond = true;
+          ++count;
         }
         std::this_thread::sleep_for(Clock::TimeMSecs(kSleepMSecs));
         ++count;
@@ -101,7 +102,7 @@ struct CvGuardTester {
     // introduce Delay to allow Signal to proceed first
     std::this_thread::sleep_for(Clock::TimeMSecs(kDelayMSecs)); 
     CHECK_EQ(count, 2);
-    typename CV<Lock,Mode>::WaitGuard wg{cv, [&cond](){return cond.load();}};
+    CvWg<Lock,Mode> wg{cv, [&cond](){return cond.load();}};
     CHECK_EQ(count, 2);
     Clock::TimeDuration elapsed1 = Clock::MSecs() - now;
     CHECK_GE(elapsed1, kDelayMSecs);
@@ -119,12 +120,12 @@ struct CvGuardTester {
     std::atomic_bool cond{false};
     std::atomic_int  prewaiters{0}, waiters{0};
     auto signal_fn = [this, &cond](bool broadcast) {
-      typename CV<Lock,Mode>::SignalGuard sg{cv, broadcast};
+      CvSg<Lock,Mode> sg{cv, broadcast};
        cond = true;
     }; 
     auto wait_fn = [this, &cond, &prewaiters, &waiters](int i) {
       ++prewaiters;
-      typename CV<Lock,Mode>::WaitGuard wg{cv, [&cond](){return cond.load();}};
+      CvWg<Lock,Mode> wg{cv, [&cond](){return cond.load();}};
        ++waiters;
     };
     
@@ -150,12 +151,10 @@ struct CvGuardTester {
     // Now that the cond is true: check waiters proceed without any signal
     for (int i=0; i<kNumThreads; ++i)
        th_id.at(i) = thread(wait_fn, i);
-    // allow time for waiter threads to spawn
-    this_thread::sleep_for(Clock::TimeMSecs(kDelayMSecs)); 
-    CHECK_EQ(prewaiters, 2*kNumThreads);
-    CHECK_EQ(waiters, 2*kNumThreads);
     for (int i=0; i<kNumThreads; ++i) 
       th_id.at(i).join();
+    CHECK_EQ(prewaiters, 2*kNumThreads);
+    CHECK_EQ(waiters, 2*kNumThreads);
   }  
 };
 

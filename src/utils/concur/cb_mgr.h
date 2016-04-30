@@ -51,10 +51,9 @@
 namespace asarcar { namespace utils { namespace concur {
 //-----------------------------------------------------------------------------
 
+template <typename F = std::function<void(void)>>
 class CbMgr {
  public:
-  using Closure = std::function<void(void)>;
-
   CbMgr();
   ~CbMgr()                         = default;
   CbMgr(const CbMgr& o)            = delete;
@@ -65,8 +64,8 @@ class CbMgr {
   // Closure passed is returned as sealed to guarantee execution "safely."
   // i.e. cb execution is linked to the lifetime of the parent object
   // which contains the cb_mgr_
-  Closure Seal(Closure&& naked_cb) {
-    return std::bind(SealedCb, cb_p_, std::forward<Closure>(naked_cb));
+  inline void Seal(F* naked_cb_p) {
+    *naked_cb_p = std::bind(SealedCb, cb_p_, std::move(*naked_cb_p));
   }
   // Quash future callbacks & Wait for all outstanding callbacks to complete
   void QuashNWait(const char* file_name, int line_num);
@@ -81,7 +80,7 @@ class CbMgr {
   // unless wrapped in std::[c]ref. As such, SealedCb may accept
   // smart pointer argument as reference to shared_ptr to avoid
   // yet another reference counting
-  static void SealedCb(CbStatePtr&, const Closure&);
+  static void SealedCb(CbStatePtr&, const F&);
 };
 
 #define CB_QUASH_N_WAIT(cb_mgr) (cb_mgr).QuashNWait(__FILE__, __LINE__)

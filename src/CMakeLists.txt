@@ -222,7 +222,7 @@ function(register_test test_name)
 
   set(test_env "${test_env};TEST_OUTPUT_DIR=${test_op_dir}")
   # message("<test_env test_command> is <${test_env} ${test_command}>")
-  set_tests_properties(${test_name} PROPERTIES TIMEOUT 45
+  set_tests_properties(${test_name} PROPERTIES TIMEOUT 5
                        ENVIRONMENT "${test_env}")
   set_property(TARGET ${test_name} 
                PROPERTY OUTPUT_NAME "${test_name}${BUILD_POSTFIX}")

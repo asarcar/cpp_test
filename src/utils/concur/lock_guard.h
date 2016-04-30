@@ -26,6 +26,7 @@
 // Google Headers
 // Local Headers
 #include "utils/concur/lock.h"
+#include "utils/concur/spin_lock.h"
 
 //! @addtogroup utils
 //! @{
@@ -36,7 +37,7 @@ namespace asarcar { namespace utils { namespace concur {
 
 //! @class    lock_guard
 //! @brief    RAII for lock with shared or exclusive semantics
-template<typename Lock>
+template<typename Lock=SpinLock>
 class LockGuard {
  public:
   explicit LockGuard(Lock& m): 

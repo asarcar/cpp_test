@@ -89,6 +89,7 @@
 #include "utils/concur/futex.h"
 #include "utils/concur/lock.h"
 #include "utils/concur/lock_guard.h"
+#include "utils/concur/spin_lock.h"
 //! @addtogroup utils
 //! @{
 
@@ -96,10 +97,10 @@
 namespace asarcar { namespace utils { namespace concur {
 //-----------------------------------------------------------------------------
 
-template <typename Lock, LockMode Mode=LockMode::EXCLUSIVE_LOCK>
+template <typename LockType=SpinLock, LockMode Mode=LockMode::EXCLUSIVE_LOCK>
 class CV {
  public:
-  explicit CV(Lock& lck): lck_(lck) {}
+  explicit CV(LockType& lck): lck_(lck) {}
   ~CV(void)                   = default;
   CV(const CV& o)             = delete;
   CV& operator=(const CV& o)  = delete;
@@ -120,45 +121,52 @@ class CV {
     //             MaxDuration() wait indefinitely until predicate true
     // success: false when pred failed and we aborted due to timeout
     template <typename Predicate>
-    explicit WaitGuard(CV<Lock,Mode>& cv, Predicate pred, 
+    explicit WaitGuard(CV<LockType,Mode>& cv, Predicate pred, 
                        const Clock::TimeDuration wait_msecs, 
                        bool* success_p);
 
     template <typename Predicate>
-    explicit WaitGuard(CV<Lock,Mode>& cv, Predicate pred) : 
+    explicit WaitGuard(CV<LockType,Mode>& cv, Predicate pred) : 
         WaitGuard{cv, pred, Clock::MaxDuration(), nullptr} {}
  
     ~WaitGuard(void) { cv_.unlock(); }
 
    private:
-    CV<Lock,Mode>& cv_;
+    CV<LockType,Mode>& cv_;
   };
   
   class SignalGuard {
    public:
     friend class CV;
     template <LockMode nMode = Mode>
-    explicit SignalGuard(CV<Lock,Mode>& cv, 
+    explicit SignalGuard(CV<LockType,Mode>& cv, 
                          EnableIf<nMode==LockMode::SHARE_LOCK, bool> broadcast): 
         cv_(cv), broadcast_{broadcast} {cv_.xlock();} 
-    explicit SignalGuard(CV<Lock,Mode>& cv):
+    explicit SignalGuard(CV<LockType,Mode>& cv): 
         cv_(cv), broadcast_{false} {cv_.xlock();}
     ~SignalGuard(void);
    private:
-    CV<Lock,Mode>& cv_;
+    CV<LockType,Mode>& cv_;
     bool      broadcast_;
   };
 
  private:
-  Lock&                   lck_;
+  LockType&               lck_;
   std::mutex              m_;
   std::condition_variable cond_;
 };
 
-template <typename Lock, LockMode Mode>
+template <typename LockType=SpinLock, LockMode Mode=LockMode::EXCLUSIVE_LOCK>
+using CvWg = typename CV<LockType,Mode>::WaitGuard;
+
+template <typename LockType=SpinLock, LockMode Mode=LockMode::EXCLUSIVE_LOCK>
+using CvSg = typename CV<LockType,Mode>::SignalGuard;
+
+
+template <typename LockType, LockMode Mode>
 template <typename Predicate>
-CV<Lock,Mode>::
-WaitGuard::WaitGuard(CV<Lock,Mode>& cv, Predicate pred, 
+CV<LockType,Mode>::
+WaitGuard::WaitGuard(CV<LockType,Mode>& cv, Predicate pred, 
                      const Clock::TimeDuration wait_msecs, 
                      bool* success_p) : cv_(cv) {
   Clock::TimePoint begin_msecs = Clock::MSecs();
@@ -184,8 +192,8 @@ WaitGuard::WaitGuard(CV<Lock,Mode>& cv, Predicate pred,
   return;
 }
 
-template <typename Lock, LockMode Mode>
-CV<Lock,Mode>::
+template <typename LockType, LockMode Mode>
+CV<LockType,Mode>::
 SignalGuard::~SignalGuard(void) {
   { // Don't miss signal when waiter will wait
     LockGuard<std::mutex> lkg{cv_.m_};

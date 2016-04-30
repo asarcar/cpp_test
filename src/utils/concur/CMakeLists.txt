@@ -14,7 +14,7 @@
 
 # Author: Arijit Sarcar <sarcar_a@yahoo.com>
 
-add_library(concur_utils cb_mgr.cc futex.cc lock.cc rw_mutex.cc spin_lock.cc)
+add_library(concur_utils cb_mgr.cc futex.cc lock.cc rw_mutex.cc spin_lock.cc thread_pool.cc)
 target_link_libraries(concur_utils basic_utils)
 
 ######################################

@@ -19,6 +19,6 @@ add_ctest_fn(concur_q concur_utils)
 add_ctest_fn(cv_guard concur_utils)
 add_ctest_fn(monitor)
 add_ctest_fn(rw_mutex concur_utils)
-add_ctest_fn(server_pool concur_utils)
 add_ctest_fn(spin_lock concur_utils)
+add_ctest_fn(thread_pool concur_utils)
 

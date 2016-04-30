@@ -494,7 +494,7 @@ RadixTrie<Key,Value>::SetUpTreeBranch(
     NodePtr    first_mm_node_p, 
     int        lm_key_len, 
     int        lp_key_len) {
-  DCHECK_NOTNULL(first_mm_node_p);
+  DCHECK(first_mm_node_p != nullptr);
   DCHECK(lp_key_len - lm_key_len < first_mm_node_p->key.size());
   int key_len = kv.first.size();
 
