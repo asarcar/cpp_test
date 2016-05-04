@@ -13,8 +13,8 @@
 // limitations under the License.
 //
 
-#ifndef _UTILS_CONCUR_RW_MUTEX_H_
-#define _UTILS_CONCUR_RW_MUTEX_H_
+#ifndef _UTILS_CONCUR_RW_LOCK_H_
+#define _UTILS_CONCUR_RW_LOCK_H_
 
 //! @file   rw_mutex.h
 //! @brief  rw_mutex: Allows multiple readers and exclusive writer.
@@ -31,7 +31,9 @@
 // Local Headers
 #include "utils/basic/basictypes.h"
 #include "utils/basic/fassert.h"
+#include "utils/concur/cv_guard.h"
 #include "utils/concur/lock.h"
+#include "utils/concur/spin_lock.h"
 #include "utils/ds/elist.h"
 
 //! @addtogroup utils
@@ -42,36 +44,44 @@ namespace asarcar { namespace utils { namespace concur {
 
 namespace ds = ::asarcar::utils::ds;
 
-//! @class    RWMutex
+// Forward Declaration
+template <typename LockType>
+class RWLock;
+template <typename LockType>
+std::ostream& operator<<(std::ostream&os, const RWLock<LockType>& rwm);
+
+//! @class    RWLock
 //! @brief    Supports multiple readers and single writer
 //! behavior undefined if rw_lock is called recursively 
-class RWMutex {
+template <typename LockType = SpinLock>
+class RWLock {
  public:
   using QElem = std::pair<std::thread::id, LockMode>;
   using QIterator = std::deque<QElem>::iterator;
 
-  RWMutex(void)                        = default;
-  ~RWMutex(void)                       = default;
-  RWMutex(const RWMutex& o)            = delete;
-  RWMutex& operator=(const RWMutex& o) = delete;
-  RWMutex(RWMutex&& o)                 = delete; 
-  RWMutex& operator=(RWMutex&& o)      = delete;
+  explicit RWLock(void) : lck_{}, cv_{lck_}, owners_{}, 
+    q_pending_{}, cur_mode_{LockMode::UNLOCK}, num_readers_{0} {}
+  ~RWLock(void)                       = default;
+  RWLock(const RWLock& o)            = delete;
+  RWLock& operator=(const RWLock& o) = delete;
+  RWLock(RWLock&& o)                 = delete; 
+  RWLock& operator=(RWLock&& o)      = delete;
 
   void lock(LockMode mode = LockMode::EXCLUSIVE_LOCK);
   void unlock(void);
-  friend std::ostream& operator<<(std::ostream& os, const RWMutex& rwm);
+  friend std::ostream& operator<< <>(std::ostream& os, const RWLock& rwm);
 
  private:
-  std::condition_variable       cv_{};
-  std::mutex                    mutex_{};
-  ds::Elist<std::thread::id>    owners_{};
+  LockType                      lck_;
+  CV<LockType>                  cv_;
+  ds::Elist<std::thread::id>    owners_;
   // deque is implemented as a chunks of blocks/arrays
-  std::deque<QElem>             q_pending_{}; 
-  LockMode                      cur_mode_{LockMode::UNLOCK};
-  int                           num_readers_{0};
+  std::deque<QElem>             q_pending_; 
+  LockMode                      cur_mode_;
+  int                           num_readers_;
 };    
 
 //-----------------------------------------------------------------------------
 } } } // namespace asarcar { namespace utils { namespace concur {
 
-#endif // _UTILS_CONCUR_RW_MUTEX_H_
+#endif // _UTILS_CONCUR_RW_LOCK_H_

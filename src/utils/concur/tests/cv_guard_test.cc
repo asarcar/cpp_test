@@ -16,18 +16,18 @@
 
 // Standard C++ Headers
 #include <algorithm>    // std::max
- #include <mutex>
- #include <thread>
- // Standard C Headers
- #include <cxxabi.h>
- // Google Headers
- #include <glog/logging.h>
- // Local Headers
- #include "utils/basic/clock.h"
- #include "utils/basic/init.h"
- #include "utils/concur/cv_guard.h"
- #include "utils/concur/rw_mutex.h"
- #include "utils/concur/spin_lock.h"
+#include <mutex>
+#include <thread>
+// Standard C Headers
+#include <cxxabi.h>
+// Google Headers
+#include <glog/logging.h>
+// Local Headers
+#include "utils/basic/clock.h"
+#include "utils/basic/init.h"
+#include "utils/concur/cv_guard.h"
+#include "utils/concur/rw_lock.h"
+#include "utils/concur/spin_lock.h"
 
  using namespace asarcar;
  using namespace asarcar::utils;
@@ -46,10 +46,10 @@
 
 static constexpr int kNumThreads  = 3;
 
-template<typename Lock, LockMode Mode=LockMode::EXCLUSIVE_LOCK>
+template<typename LockType, LockMode Mode=LockMode::EXCLUSIVE_LOCK>
 struct CvGuardTester {
-  Lock             lck;
-  CV<Lock,Mode>    cv;
+  LockType              lck;
+  CV<LockType,Mode>     cv;
 
   CvGuardTester() : lck{}, cv{lck} {}
   ~CvGuardTester() = default;
@@ -63,7 +63,7 @@ struct CvGuardTester {
          std::this_thread::sleep_for(Clock::TimeMSecs(kDelayMSecs)); 
          ++count;
          {
-           CvSg<Lock,Mode> sg{cv};
+           CvSg<LockType,Mode> sg{cv};
            cond = true;
            std::this_thread::sleep_for(Clock::TimeMSecs(kSleepMSecs));
            ++count;
@@ -72,7 +72,7 @@ struct CvGuardTester {
          ++count;
       });
     CHECK_EQ(count, 0);
-    CvWg<Lock,Mode> wg{cv, [&cond](){return cond.load();}};
+    CvWg<LockType,Mode> wg{cv, [&cond](){return cond.load();}};
     CHECK_EQ(count, 2);
     Clock::TimeDuration elapsed1 = Clock::MSecs() - now;
     CHECK_GE(elapsed1, kSleepNDelayMSecs);
@@ -92,7 +92,7 @@ struct CvGuardTester {
     std::thread tid = std::thread([this, &cond, &count]() {
         ++count;
         {
-          CvSg<Lock,Mode> sg{cv};
+          CvSg<LockType,Mode> sg{cv};
           cond = true;
           ++count;
         }
@@ -102,7 +102,7 @@ struct CvGuardTester {
     // introduce Delay to allow Signal to proceed first
     std::this_thread::sleep_for(Clock::TimeMSecs(kDelayMSecs)); 
     CHECK_EQ(count, 2);
-    CvWg<Lock,Mode> wg{cv, [&cond](){return cond.load();}};
+    CvWg<LockType,Mode> wg{cv, [&cond](){return cond.load();}};
     CHECK_EQ(count, 2);
     Clock::TimeDuration elapsed1 = Clock::MSecs() - now;
     CHECK_GE(elapsed1, kDelayMSecs);
@@ -120,12 +120,12 @@ struct CvGuardTester {
     std::atomic_bool cond{false};
     std::atomic_int  prewaiters{0}, waiters{0};
     auto signal_fn = [this, &cond](bool broadcast) {
-      CvSg<Lock,Mode> sg{cv, broadcast};
-       cond = true;
+      CvSg<LockType,Mode> sg{cv, broadcast};
+      cond = true;
     }; 
     auto wait_fn = [this, &cond, &prewaiters, &waiters](int i) {
       ++prewaiters;
-      CvWg<Lock,Mode> wg{cv, [&cond](){return cond.load();}};
+      CvWg<LockType,Mode> wg{cv, [&cond](){return cond.load();}};
        ++waiters;
     };
     
@@ -161,32 +161,46 @@ struct CvGuardTester {
 int main(int argc, char *argv[]) {
   Init::InitEnv(&argc, &argv);
 
-  CvGuardTester<mutex> test_m{};
-  test_m.WaitTest();
-  test_m.NotifyTest();
-  LOG(INFO) << "Condition Variable<Mutex,Exclusive_Lock> Passed";
-
-  CvGuardTester<SpinLock> test_sp{};
-  test_sp.WaitTest();
-  test_sp.NotifyTest();
-  LOG(INFO) << "Condition Variable<SpinLock,Exclusive_Lock> Passed";
-
-  CvGuardTester<RWMutex> test_rw{};
-  test_rw.WaitTest();
-  test_rw.NotifyTest();
-  LOG(INFO) << "Condition Variable<RWMutex,Exclusive_Lock> Passed";
-
   CvGuardTester<SpinLock, LockMode::SHARE_LOCK> test_sh_sp{};
   test_sh_sp.WaitTest();
   test_sh_sp.NotifyTest();
   test_sh_sp.NotifyAllTest();
   LOG(INFO) << "Condition Variable<SpinLock,Share_Lock> Passed";
 
-  CvGuardTester<RWMutex, LockMode::SHARE_LOCK> test_sh_rw{};
-  test_sh_rw.WaitTest();
-  test_sh_rw.NotifyTest();
-  test_sh_rw.NotifyAllTest();
-  LOG(INFO) << "Condition Variable<RWMutex,Share_Lock> Passed";
+  if (FLAGS_auto_test)
+    return 0;
+
+  CvGuardTester<SpinLock> test_sp{};
+  test_sp.WaitTest();
+  test_sp.NotifyTest();
+  LOG(INFO) << "Condition Variable<SpinLock,Exclusive_Lock> Passed";
+
+  CvGuardTester<mutex> test_m{};
+  test_m.WaitTest();
+  test_m.NotifyTest();
+  LOG(INFO) << "Condition Variable<Mutex,Exclusive_Lock> Passed";
+
+  CvGuardTester<RWLock<mutex>, LockMode::SHARE_LOCK> test_sh_rw_mu{};
+  test_sh_rw_mu.WaitTest();
+  test_sh_rw_mu.NotifyTest();
+  test_sh_rw_mu.NotifyAllTest();
+  LOG(INFO) << "Condition Variable<RWLock<mutex>,Share_Lock> Passed";
+
+  CvGuardTester<RWLock<mutex>, LockMode::EXCLUSIVE_LOCK> test_rw_mu{};
+  test_rw_mu.WaitTest();
+  test_rw_mu.NotifyTest();
+  LOG(INFO) << "Condition Variable<RWLock<mutex>,Exclusive_Lock> Passed";
+
+  CvGuardTester<RWLock<SpinLock>, LockMode::SHARE_LOCK> test_sh_rw_sp{};
+  test_sh_rw_sp.WaitTest();
+  test_sh_rw_sp.NotifyTest();
+  test_sh_rw_sp.NotifyAllTest();
+  LOG(INFO) << "Condition Variable<RWLock<SpinLock>,Share_Lock> Passed";
+
+  CvGuardTester<RWLock<SpinLock>, LockMode::EXCLUSIVE_LOCK> test_rw_sp{};
+  test_rw_sp.WaitTest();
+  test_rw_sp.NotifyTest();
+  LOG(INFO) << "Condition Variable<RWLock<SpinLock>,Exclusive_Lock> Passed";
 
   return 0;
 }

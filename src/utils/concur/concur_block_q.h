@@ -101,7 +101,8 @@ class ConcurBlockQ {
     Node*         prev_head = nullptr;
     NodeValueType val{};
     {
-      CvWg<> cvw_g{cv_, [this]{return head_->next_!=nullptr;}, 
+      CvWg<> cvw_g{cv_, std::function<void(void)>{},
+            [this]{return head_->next_!=nullptr;}, 
             non_blocking ? 0 : Clock::MaxDuration(), &success};
       if (!success) // non_block case & predicate failed: head_->next==nullptr
         return val;

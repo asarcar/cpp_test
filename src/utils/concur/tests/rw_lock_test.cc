@@ -29,7 +29,7 @@
 #include "utils/basic/fassert.h"
 #include "utils/basic/init.h"
 #include "utils/concur/lock_guard.h"
-#include "utils/concur/rw_mutex.h"
+#include "utils/concur/rw_lock.h"
 
 using namespace asarcar;
 using namespace asarcar::utils;
@@ -52,9 +52,10 @@ DEFINE_int32(num_reads_per_write, NUM_RDS_PER_WR,
              "number of reads for every write"); 
 class ValTest {
 public:
+  using RWSpinLock = RWLock<SpinLock>;
   void op(LockMode mode, int inc) {
     uint32_t rnd_val = _wfn();
-    LockGuard<RWMutex> lckg{_rwm, mode};
+    LockGuard<RWSpinLock> lckg{_rwm, mode};
     if (mode == LockMode::EXCLUSIVE_LOCK) {
       _v += inc;
     } 
@@ -74,7 +75,7 @@ public:
   }
  private:
   int      _v{0};
-  RWMutex _rwm{};
+  RWSpinLock _rwm{};
   using RdValFn=uint32_t(void);
   std::function<uint32_t(void)> 
   _wfn { std::bind(std::uniform_int_distribution<uint32_t>{1,MAX_NUM_WAIT}, 

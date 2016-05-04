@@ -37,7 +37,7 @@ namespace asarcar { namespace utils { namespace concur {
 
 //! @class    lock_guard
 //! @brief    RAII for lock with shared or exclusive semantics
-template<typename Lock=SpinLock>
+template <typename Lock=SpinLock>
 class LockGuard {
  public:
   explicit LockGuard(Lock& m): 

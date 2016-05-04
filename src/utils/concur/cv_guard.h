@@ -120,14 +120,20 @@ class CV {
     // wait_msecs: 0 when waiting not allowed: abort if predicate false
     //             MaxDuration() wait indefinitely until predicate true
     // success: false when pred failed and we aborted due to timeout
-    template <typename Predicate>
-    explicit WaitGuard(CV<LockType,Mode>& cv, Predicate pred, 
+    template <typename PreWaitFn, typename Predicate>
+    explicit WaitGuard(CV<LockType,Mode>& cv, 
+                       PreWaitFn prewaitfn, Predicate pred, 
                        const Clock::TimeDuration wait_msecs, 
                        bool* success_p);
 
     template <typename Predicate>
     explicit WaitGuard(CV<LockType,Mode>& cv, Predicate pred) : 
-        WaitGuard{cv, pred, Clock::MaxDuration(), nullptr} {}
+        WaitGuard{cv, std::function<void(void)>{}, 
+          pred, Clock::MaxDuration(), nullptr} {}
+
+    template <typename PreWaitFn, typename Predicate>
+    explicit WaitGuard(CV<LockType,Mode>& cv, PreWaitFn prewaitfn, Predicate pred) : 
+        WaitGuard{cv, prewaitfn, pred, Clock::MaxDuration(), nullptr} {}
  
     ~WaitGuard(void) { cv_.unlock(); }
 
@@ -138,9 +144,7 @@ class CV {
   class SignalGuard {
    public:
     friend class CV;
-    template <LockMode nMode = Mode>
-    explicit SignalGuard(CV<LockType,Mode>& cv, 
-                         EnableIf<nMode==LockMode::SHARE_LOCK, bool> broadcast): 
+    explicit SignalGuard(CV<LockType,Mode>& cv, bool broadcast): 
         cv_(cv), broadcast_{broadcast} {cv_.xlock();} 
     explicit SignalGuard(CV<LockType,Mode>& cv): 
         cv_(cv), broadcast_{false} {cv_.xlock();}
@@ -162,11 +166,11 @@ using CvWg = typename CV<LockType,Mode>::WaitGuard;
 template <typename LockType=SpinLock, LockMode Mode=LockMode::EXCLUSIVE_LOCK>
 using CvSg = typename CV<LockType,Mode>::SignalGuard;
 
-
 template <typename LockType, LockMode Mode>
-template <typename Predicate>
+template <typename PreWaitFn, typename Predicate>
 CV<LockType,Mode>::
-WaitGuard::WaitGuard(CV<LockType,Mode>& cv, Predicate pred, 
+WaitGuard::WaitGuard(CV<LockType,Mode>& cv, 
+                     PreWaitFn prewaitfn, Predicate pred, 
                      const Clock::TimeDuration wait_msecs, 
                      bool* success_p) : cv_(cv) {
   Clock::TimePoint begin_msecs = Clock::MSecs();
@@ -175,6 +179,9 @@ WaitGuard::WaitGuard(CV<LockType,Mode>& cv, Predicate pred,
   *success_p = false;
 
   cv_.lock();
+  if (prewaitfn)
+    prewaitfn();
+
   while(!pred()) { 
     // if wait time is bounded then quit if time exceeded 
     if (wait_msecs == 0 || (Clock::MSecs() - begin_msecs) > wait_msecs)
