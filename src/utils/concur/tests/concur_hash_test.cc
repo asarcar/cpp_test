@@ -24,6 +24,7 @@
 // Local Headers
 #include "utils/basic/init.h"
 #include "utils/concur/concur_hash.h"
+#include "utils/concur/thread_pool.h"
 
 using namespace asarcar;
 using namespace asarcar::utils;
@@ -75,14 +76,17 @@ class ConcurHashTester {
   MapType      cmap_;  
   atomic_int   size_;
 
-  static constexpr int kMaxBits    = 12;
-  static constexpr int kLessBits   = 8;
+  static constexpr int kMaxBits    = 6;
+  static constexpr int kLessBits   = 3;
   static constexpr int kMaxVal     = 1 << kMaxBits;
   static constexpr int kNumThreads = 4; 
   static void SameKeyOp(ConcurHashTester *p, const T& k, const int threadNum);
   static void InsertOp(ConcurHashTester *p);
   static void EraseOp(ConcurHashTester *p);
 };
+
+template <typename T>
+constexpr int ConcurHashTester<T>::kNumThreads;
 
 template <typename T>
 void ConcurHashTester<T>::SanityTest(void) {
@@ -103,43 +107,22 @@ void ConcurHashTester<T>::SanityTest(void) {
 
 template <typename T>
 void ConcurHashTester<T>::ConcurSimpleTest(void) {
-  array<thread, kNumThreads> ths;
+  auto tpool_p = make_shared<ThreadPool<>>(kNumThreads);
   for (int i=0; i<kNumThreads; ++i)
-    ths.at(i) = thread(&SameKeyOp, this, T{5}, i);
-  for (int i=0; i<kNumThreads; ++i)
-    ths.at(i).join();
+    tpool_p->AddTask(bind(&SameKeyOp, this, T{5}, i));
+  tpool_p.reset();
 
   CHECK_EQ(cmap_.Size(),0);
 }
 
 template <typename T>
 void ConcurHashTester<T>::ConcurStressTest(void) {
-  array<thread, kNumThreads*2> ths;
-
-  // Do a bunch of concurrent inserts & check hash size 
-  CHECK_EQ(size_, cmap_.Size());
-  for (int i=0; i<kNumThreads; ++i)
-    ths.at(i) = thread(&InsertOp, this);
-  for (int i=0; i<kNumThreads; ++i)
-    ths.at(i).join();
-  CHECK_EQ(size_, cmap_.Size());
-  CHECK_EQ(size_, 1 << kLessBits);
-
-  // Do a bunch of concurrent erase & check hash size 
-  for (int i=0; i<kNumThreads; ++i)
-    ths.at(i) = thread(&EraseOp, this);
-  for (int i=0; i<kNumThreads; ++i)
-    ths.at(i).join();
-  CHECK_EQ(size_, cmap_.Size());
-  CHECK_EQ(size_, 0);
-
-  // Do a bunch of concurrent inserts and deletes & check hash size 
-  for (int i=0; i<kNumThreads; ++i)
-    ths.at(i) = thread(&InsertOp, this);
-  for (int i=kNumThreads; i<kNumThreads*2; ++i)
-    ths.at(i) = thread(&EraseOp, this);
-  for (int i=0; i<kNumThreads*2; ++i)
-    ths.at(i).join();
+  auto tpool_p = make_shared<ThreadPool<>>(kNumThreads);
+  for (int i=0; i<kNumThreads/2; ++i) {
+    tpool_p->AddTask(bind(&InsertOp, this));
+    tpool_p->AddTask(bind(&EraseOp, this));
+  }
+  tpool_p.reset();
 
   CHECK_EQ(size_, cmap_.Size());
 }

@@ -1,4 +1,4 @@
- // Copyright 2014 asarcar Inc.
+// Copyright 2014 asarcar Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,42 +28,47 @@ using namespace asarcar;
 using namespace asarcar::utils;
 using namespace asarcar::utils::misc;
 using namespace std;
+using namespace std::placeholders;
 
 class RangeBindorTester {
  public:
   using IntPair     = pair<int,int>;
   using ThreeIntMul = function<int(int, int, int)>;
   using ManyIntMul  = function<int(IntPair,int,int,IntPair,int)>;
-  RangeBindorTester(void) : 
-      mul_{
-      [](IntPair v1, int a, int b, IntPair v2, int c){
-        return v1.first*v1.second*a*b*v2.first*v2.second*c;
-      }
-  } {}
-  ~RangeBindorTester(void) {}
-  void Run(void) {
-    LOG(INFO) << "FN_BIND: Test";
-    auto mul2 = fn_bind(mul_);
-    CHECK_EQ(mul2(std::make_pair(2,4),6,8,std::make_pair(10,12),14), (2*4*6*8*10*12*14));
+  void SanityTest(void) {
+    ManyIntMul f1 = [](IntPair v1, int a, int b, IntPair v2, int c) {
+      return v1.first*v1.second*a*b*v2.first*v2.second*c;
+    };
+    auto f2 = RangeBindor::None(f1);
+    CHECK_EQ(f2(std::make_pair(2,4),6,8,
+                std::make_pair(10,12),14), (2*4*6*8*10*12*14));
+    LOG(INFO) << "SanityTest Passed";
     return;
   }
+  void AllArgsTest(void) {
+    ManyIntMul f1 = [](IntPair v1, int a, int b, IntPair v2, int c) {
+      return v1.first*v1.second*a*b*v2.first*v2.second*c;
+    };
+    auto f2 = RangeBindor::All(f1, std::make_pair(2,4),6,8,
+                                   std::make_pair(10,12),14);
+    CHECK_EQ(f2(), (2*4*6*8*10*12*14));
+    LOG(INFO) << "AllArgsTest Passed";
+    return;
+  }
+  void SealTest(void) {
+    ManyIntMul f1 = [](IntPair v1, int a, int b, IntPair v2, int c) {
+      return v1.first*v1.second*a*b*v2.first*v2.second*c;
+    };
+    function<int(int,function<int(void)>)> f2 = 
+        [](int i, function<int(void)> f3) {return i*f3();};
+    function<int(void)> f4 = 
+        RangeBindor::Seal(f2, 16, 
+                          f1, std::make_pair(2,4),6,8,
+                          std::make_pair(10,12),14);
+    CHECK_EQ(f4(), (2*4*6*8*10*12*14*16));
+    LOG(INFO) << "SealTest Passed";
+  }
  private:
-  // Bind Arguments to Positions
-  template<typename Ret, typename... Args, int... Positions>
-  function<Ret(Args...)> 
-  fn_bind_arg_pos(function<Ret(Args...)>& fn_orig,
-                  const Range<Positions...>&   arg_pos) {
-    return bind(fn_orig, _Placeholder<Positions>()...);
-  }
-
-  template <typename Ret, typename... Args>
-  function<Ret(Args...)>
-  fn_bind(function<Ret(Args...)>& fn_orig) {
-    auto range = BasicRangeBindor<sizeof...(Args)>();
-    return fn_bind_arg_pos(fn_orig, range);
-  }
-
-  ManyIntMul mul_;
 };
 
 // Flag Declarations
@@ -74,7 +79,9 @@ int main(int argc, char **argv) {
   
   LOG(INFO) << argv[0] << " Executing Test";
   RangeBindorTester rbt;
-  rbt.Run();
+  rbt.SanityTest();
+  rbt.AllArgsTest();
+  rbt.SealTest();
   LOG(INFO) << argv[0] << " Test Passed";
 
   return 0;

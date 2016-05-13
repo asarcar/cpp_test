@@ -53,19 +53,19 @@ struct Range {
 };
 
 template<int First, int Num, int Offset, int Val, int... Args> 
-struct RangeBindor {
-  static_assert(First > 0, "RangeBindor: First > 0 failed");
-  static_assert(Num > 0, "RangeBindor: Num > 0 failed");
-  static_assert(!(Val < 0), "RangeBindor: Val >= 0 failed");
-  static_assert(!(Offset < 0), "RangeBindor: Offset >= 0 failed");
-  using type = typename RangeBindor<First, Num, Offset-1, Val-1, Val, Args...>::type;
+struct RangeBind {
+  static_assert(First > 0, "RangeBind: First > 0 failed");
+  static_assert(Num > 0, "RangeBind: Num > 0 failed");
+  static_assert(!(Val < 0), "RangeBind: Val >= 0 failed");
+  static_assert(!(Offset < 0), "RangeBind: Offset >= 0 failed");
+  using type = typename RangeBind<First, Num, Offset-1, Val-1, Val, Args...>::type;
 };
 
 template <int First, int Num, int Val, int... Args>
-struct RangeBindor <First, Num, 0, Val, Args...> {
-  static_assert(First > 0, "RangeBindor: First > 0 failed");
-  static_assert(Num > 0, "RangeBindor: Num > 0 failed");
-  static_assert(!(Val < 0), "RangeBindor: Val >= 0 failed");
+struct RangeBind <First, Num, 0, Val, Args...> {
+  static_assert(First > 0, "RangeBind: First > 0 failed");
+  static_assert(Num > 0, "RangeBind: Num > 0 failed");
+  static_assert(!(Val < 0), "RangeBind: Val >= 0 failed");
   using type = Range<Args...>;
 };
 
@@ -73,22 +73,62 @@ struct RangeBindor <First, Num, 0, Val, Args...> {
 // One attempt to solve the above recursive definition could be
 // to consolidate both definitions into one:
 // template<int First, int Num, int Val, int... Args>
-// struct RangeBindor {
+// struct RangeBind {
 //   using type = 
 //     Conditional<(First - Val == 1),
 //                 Range<Args...>, 
-//                 typename RangeBindor<First, Num, Val-1, Val, Args...>::type>;
+//                 typename RangeBind<First, Num, Val-1, Val, Args...>::type>;
 // };
 // However, Conditional seems to *always* evaluate both the clauses which 
 // leads to infinite recursion...
 //
 
 template<int Num>
-using BasicRangeBindor=typename RangeBindor<1,Num,Num,Num>::type;
+using BasicRangeBind=typename RangeBind<1,Num,Num,Num>::type;
 
 // Range<Base, Base+1,..., Base+Num-1> i.e. [i,i+k)
 template <int Base, int Num>
-using GenericRangeBindor=typename RangeBindor<Base, Num, Num, Base+Num-1>::type;
+using GenericRangeBind=typename RangeBind<Base, Num, Num, Base+Num-1>::type;
+
+// Helper Class for Binding
+class RangeBindor {
+ public:
+  // Example:
+  //   SealAll(fn_locked, lck, fn_unlocked, a, b, c)
+  //     fn_locked(lck, fn_unlocked(a, b, c) {
+  //       lock(lck); fn_unlocked(); unlock(lck);
+  //     }
+  //   SealNone:
+  //     fn_locked(lck, fn_unlocked) {
+  //       lock(lck); fn_unlocked(); unlock(lck);
+  //     }
+  template <typename Ret, typename Arg, typename... Args>
+  static inline std::function<Ret(void)>
+  Seal(const std::function<Ret(Arg, std::function<Ret(void)>)>& fn_seal,
+       const Arg& arg, const std::function<Ret(Args...)>& fn_orig,
+       const Args... args) {
+    // Compiler: gcc 4.8.4 croaks if bind rvalue is directly substituted below
+    // without cast to std::function<Ret(void)> first
+    return All(fn_seal, arg, All(fn_orig, args...));
+  }
+  template <typename Ret, typename... Args>
+  static inline std::function<Ret(void)>
+  All(const std::function<Ret(Args...)>& fn, const Args&... args) {
+    return std::bind(fn, args...);
+  }
+  template <typename Ret, typename... Args>
+  static inline std::function <Ret(Args...)>
+  None(const std::function <Ret(Args...)>& fn_orig) {
+    return bArgs(fn_orig, BasicRangeBind<sizeof...(Args)>());
+  }
+ private:
+  template <typename Ret, typename... Args, int... Positions>
+  static inline std::function <Ret(Args...)>
+  bArgs(const std::function <Ret(Args...)>& fn_orig, 
+        const Range<Positions...>& arg_pos) {
+    return std::bind(fn_orig, std::_Placeholder<Positions>()...);
+  }
+};
 
 //-----------------------------------------------------------------------------
 } } } // namespace asarcar { namespace utils { namespace misc {
