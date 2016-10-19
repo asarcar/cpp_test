@@ -35,10 +35,12 @@ using namespace std;
 // Flag Declarations
 DECLARE_bool(auto_test);
 
+#define CHECK_STRINGEQ(str, cstr) CHECK_STREQ((str).c_str(), (cstr))
+
 class RadixTrieTester {
  public:
-  using ItPrefix = typename RadixTrie<IPv4Prefix,string>::Iterator;
-  using ItString = typename RadixTrie<StringPrefix,string>::Iterator;
+  using ItPrefix = ItR<IPv4Prefix,string>;
+  using ItString = ItR<StringPrefix,string>;
 
   void RouteTest(void);
   void StringTest(void);
@@ -52,23 +54,26 @@ class RadixTrieTester {
     rtpref_[rt] = value;
   }
 
-  const char* GetNH(const char *pref, int len) {
+  const string GetNH(const char *pref, int len) {
     ItPrefix it = rtpref_.Find(IPv4Prefix{pref, len});
-    if (it == rtpref_.End()) 
+    ItPrefix ite = rtpref_.End();
+    if (it == ite) 
       return "";
     return it->second.c_str();
   }
 
-  const char* LPMGetRoute(const char *pref, int len=0) {
+  const string LPMGetRoute(const char *pref, int len=0) {
     DCHECK(len < IPv4::MAX_LEN);
     len = (len == 0) ? IPv4::MAX_LEN : len;
     ItPrefix it = rtpref_.LongestPrefixMatch(IPv4Prefix{pref, len});
-    if (it == rtpref_.End()) 
+    ItPrefix ite = rtpref_.End();
+    if (it == ite) 
       return "";
-    return it->first.to_string().c_str();
+    DLOG(INFO) << "Key=" << it->first << ": Value=" << it->second;
+    return it->first.to_string();
   }
 
-  const char* EraseRoute(const char* pref, int len) {
+  const string EraseRoute(const char* pref, int len) {
     IPv4Prefix prefix{pref,len};
     ItPrefix it = rtpref_.Find(prefix);
     if (it == rtpref_.End())
@@ -77,7 +82,7 @@ class RadixTrieTester {
     if (itnext == rtpref_.End())
       return "";
 
-    return itnext->first.to_string().c_str();
+    return itnext->first.to_string();
   }
 };
 
@@ -94,38 +99,38 @@ void RadixTrieTester::RouteTest(void) {
   AddRoute("192.168.4.0", 24, "10.7.22.10");
   DLOG(INFO) << "AddRoutes Done. IPv4 Radix Trie Debug Dump: " << rtpref_.to_string(true);
 
-  CHECK_STREQ(GetNH("0.0.0.0", 0), "10.7.22.1");
-  CHECK_STREQ(GetNH("10.0.0.0", 8), "10.7.22.2");
-  CHECK_STREQ(GetNH("172.16.0.0", 16), "10.7.22.3");
-  CHECK_STREQ(GetNH("172.17.0.0", 16), "10.7.22.4");
-  CHECK_STREQ(GetNH("172.18.0.0", 16), "10.7.22.5");
-  CHECK_STREQ(GetNH("172.19.0.0", 16), "10.7.22.6");
-  CHECK_STREQ(GetNH("192.168.1.0", 24), "10.7.22.7");
-  CHECK_STREQ(GetNH("192.168.2.0", 24), "10.7.22.8");
-  CHECK_STREQ(GetNH("192.168.3.0", 24), "10.7.22.9");
-  CHECK_STREQ(GetNH("192.168.4.0", 24), "10.7.22.10");
+  CHECK_STRINGEQ(GetNH("0.0.0.0", 0), "10.7.22.1");
+  CHECK_STRINGEQ(GetNH("10.0.0.0", 8), "10.7.22.2");
+  CHECK_STRINGEQ(GetNH("172.16.0.0", 16), "10.7.22.3");
+  CHECK_STRINGEQ(GetNH("172.17.0.0", 16), "10.7.22.4");
+  CHECK_STRINGEQ(GetNH("172.18.0.0", 16), "10.7.22.5");
+  CHECK_STRINGEQ(GetNH("172.19.0.0", 16), "10.7.22.6");
+  CHECK_STRINGEQ(GetNH("192.168.1.0", 24), "10.7.22.7");
+  CHECK_STRINGEQ(GetNH("192.168.2.0", 24), "10.7.22.8");
+  CHECK_STRINGEQ(GetNH("192.168.3.0", 24), "10.7.22.9");
+  CHECK_STRINGEQ(GetNH("192.168.4.0", 24), "10.7.22.10");
 
-  CHECK_STREQ(LPMGetRoute("172.32.1.10"), "0.0.0.0/0");
-  CHECK_STREQ(LPMGetRoute("172.16.3.1"), "172.16.0.0/16");
-  CHECK_STREQ(LPMGetRoute("192.168.1.10"), "192.168.1.0/24");
-  CHECK_STREQ(LPMGetRoute("192.168.2.220", 16), "0.0.0.0/0");
-  CHECK_STREQ(LPMGetRoute("10.16.0.0", 16), "10.0.0.0/8");
+  CHECK_STRINGEQ(LPMGetRoute("172.32.1.10"), "0.0.0.0/0");
+  CHECK_STRINGEQ(LPMGetRoute("172.16.3.1"), "172.16.0.0/16");
+  CHECK_STRINGEQ(LPMGetRoute("192.168.1.10"), "192.168.1.0/24");
+  CHECK_STRINGEQ(LPMGetRoute("192.168.2.220", 16), "0.0.0.0/0");
+  CHECK_STRINGEQ(LPMGetRoute("10.16.0.0", 16), "10.0.0.0/8");
 
-  // remove an entry
-  CHECK_STREQ(EraseRoute("10.0.0.0", 8), "172.16.0.0/16");
-  CHECK_STREQ(LPMGetRoute("10.1.1.1"), "0.0.0.0/0");
-  CHECK_STREQ(EraseRoute("172.18.0.0", 16), "172.19.0.0/16");
-  CHECK_STREQ(EraseRoute("172.19.0.0", 16), "192.168.1.0/24");
-  CHECK_STREQ(EraseRoute("192.168.4.0", 24), "");
+  
+  CHECK_STRINGEQ(EraseRoute("10.0.0.0", 8), "172.16.0.0/16");
+  CHECK_STRINGEQ(LPMGetRoute("10.1.1.1"), "0.0.0.0/0");
+  CHECK_STRINGEQ(EraseRoute("172.18.0.0", 16), "172.19.0.0/16");
+  CHECK_STRINGEQ(EraseRoute("172.19.0.0", 16), "192.168.1.0/24");
+  CHECK_STRINGEQ(EraseRoute("192.168.4.0", 24), "");
   DLOG(INFO) << "EraseRoute: 10/8, 172.18/16, 172.19/16, and 192.168.4/24 Done.";
   DLOG(INFO) << "IPv4 Radix Trie: " << rtpref_;
-  CHECK_STREQ(EraseRoute("192.168.1.0", 24), "192.168.2.0/24");
-  CHECK_STREQ(EraseRoute("192.168.2.0", 24), "192.168.3.0/24");
-  CHECK_STREQ(EraseRoute("192.168.3.0", 24), "");
-  CHECK_STREQ(EraseRoute("172.16.0.0", 16), "172.17.0.0/16");
-  CHECK_STREQ(EraseRoute("172.17.0.0", 16), "");
+  CHECK_STRINGEQ(EraseRoute("192.168.1.0", 24), "192.168.2.0/24");
+  CHECK_STRINGEQ(EraseRoute("192.168.2.0", 24), "192.168.3.0/24");
+  CHECK_STRINGEQ(EraseRoute("192.168.3.0", 24), "");
+  CHECK_STRINGEQ(EraseRoute("172.16.0.0", 16), "172.17.0.0/16");
+  CHECK_STRINGEQ(EraseRoute("172.17.0.0", 16), "");
   CHECK_EQ(rtpref_.NSize(), 1);
-  CHECK_STREQ(EraseRoute("0.0.0.0", 0), "");
+  CHECK_STRINGEQ(EraseRoute("0.0.0.0", 0), "");
   CHECK_EQ(rtpref_.Size(), 0);
   
   DLOG(INFO) << "EraseRoute: All prefixes done. IPv4 Radix Trie: " << rtpref_;

@@ -42,7 +42,7 @@ ProcInfo::ProcInfo() : num_cores_{0}, flags_{}, cache_line_size_{0} {
 
   // Parse the information by reading /proc/cpuinfo
   inp.open("/proc/cpuinfo", std::ios::in);
-  FASSERT(inp); 
+  FASSERT((bool)inp); 
 
   while (getline(inp, line)) {
     // # cores: # of lines beginning with processor 
@@ -72,7 +72,7 @@ ProcInfo::ProcInfo() : num_cores_{0}, flags_{}, cache_line_size_{0} {
   sysfile.open("/sys/devices/system/cpu/cpu0/cache/index0/coherency_line_size", 
                std::ios::in);
   
-  FASSERT(sysfile);
+  FASSERT((bool)sysfile);
   
   sysfile >> cache_line_size_;
   sysfile.close();

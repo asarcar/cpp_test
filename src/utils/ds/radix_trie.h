@@ -63,24 +63,30 @@ template <typename Key, typename Value>
 class RadixTrie;
 
 template <typename Key, typename Value>
+class ItR;
+
+template <typename Key, typename Value>
 std::ostream& operator << (std::ostream& os, 
                            const RadixTrie<Key,Value>& r);
 
 template <typename Key, typename Value>
+std::ostream& operator << (std::ostream& os, 
+                           const ItR<Key,Value>& it);
+
+template <typename Key, typename Value>
 class RadixTrie {
  public:
-  // Forward Declarations
-  class Iterator;
   using KeyValue     = std::pair<Key,Value>;
   using KeyValuePtr  = KeyValue*;
   using KeyValueUPtr = std::unique_ptr<KeyValue>;
-  using InsertRetType= std::pair<Iterator, bool>;
+  using InsertRetType= std::pair<ItR<Key,Value>, bool>;
+  friend class ItR<Key,Value>;
 
  private:
   // Forward Declarations
   class Node;
   using NodeUPtr = std::unique_ptr<Node>;
-  using NodePtr      = Node*;
+  using NodePtr  = Node*;
   class Node {
    public:
     // Tree is built using binary representation: 0 - left, 1 - right child
@@ -117,15 +123,15 @@ class RadixTrie {
  private:
   std::string to_string(NodePtr node_p, int depth, bool dump_internal_nodes);
 
-  Iterator Begin(NodePtr root_p) const;  
-  inline Iterator End(NodePtr root_p) const { 
-    return Iterator{this, root_p, nullptr};
+  ItR<Key,Value> Begin(NodePtr root_p) const;  
+  inline ItR<Key,Value> End(NodePtr root_p) const { 
+    return ItR<Key,Value>{this, root_p, nullptr};
   }
  public:
-  inline Iterator Begin() const { return Begin(nullptr); }
-  inline Iterator End() const { return End(nullptr); }
-  Iterator Find(const Key& key) const; 
-  Iterator LongestPrefixMatch(const Key& key) const;
+  inline ItR<Key,Value> Begin() const { return Begin(nullptr); }
+  inline ItR<Key,Value> End() const { return End(nullptr); }
+  ItR<Key,Value> Find(const Key& key) const; 
+  ItR<Key,Value> LongestPrefixMatch(const Key& key) const;
 
   // Intentionally we pass input param by value.
   // Users are encouraged to pass rvalue for efficiency
@@ -134,7 +140,7 @@ class RadixTrie {
   // copy the argument. 
   // Beware as otherwise, we add a copy overhead if param is lvalue.
   InsertRetType Insert(KeyValue kv);
-  Iterator Erase(Iterator it);
+  ItR<Key,Value> Erase(ItR<Key,Value> it);
 
   // Avoid: operator for first insert - wastes time default constructing
   // Value only to override it later.
@@ -173,46 +179,52 @@ class RadixTrie {
                                 NodePtr    first_mm_node_p, 
                                 int        lm_key_len, 
                                 int        lp_key_len);
+};
 
+template <typename Key, typename Value>
+class ItR {
  public:
-  class Iterator {
-    friend class RadixTrie;
-   public:
-    inline bool operator ==(const Iterator& other) const { 
-      return ((rt_p_==other.rt_p_) &&
-              (node_p_==other.node_p_));
-    }
-    inline bool operator !=(const Iterator& other) const { 
-      return !this->operator==(other);
-    }
-    inline Iterator& operator++() {
-      node_p_ = rt_p_->GetNext(sub_root_p_, node_p_);
-      return *this;
-    }
-    inline KeyValue     operator* () const { 
-      DCHECK(node_p_ != nullptr);
-      DCHECK(node_p_->keyvalue_p != nullptr);
-      return *node_p_->keyvalue_p; 
-    }
-    inline KeyValuePtr  operator-> () const { 
-      DCHECK(node_p_ != nullptr);
-      DCHECK(node_p_->keyvalue_p != nullptr);
+  friend class RadixTrie<Key,Value>;
+  inline bool operator ==(const ItR& other) const { 
+    return ((rt_p_==other.rt_p_) &&
+            (node_p_==other.node_p_));
+  }
+  inline bool operator !=(const ItR& other) const { 
+    return !this->operator==(other);
+  }
+  inline ItR& operator++() {
+    node_p_ = rt_p_->GetNext(sub_root_p_, node_p_);
+    return *this;
+  }
+  inline typename RadixTrie<Key,Value>::KeyValue
+  operator* () const { 
+    DCHECK(node_p_ != nullptr);
+    DCHECK(node_p_->keyvalue_p != nullptr);
+    return *node_p_->keyvalue_p; 
+  }
+  inline typename RadixTrie<Key,Value>::KeyValuePtr
+  operator-> () const { 
+    DCHECK(node_p_ != nullptr);
+    DCHECK(node_p_->keyvalue_p != nullptr);
       return node_p_->keyvalue_p.get(); 
-    }
-
-   private:
-    Iterator(const RadixTrie* rt_p, 
-             const NodePtr root_p, 
-             NodePtr node_p) : 
+  }
+  
+  // helper function to allow chained cout cmds: example
+  // cout << "ItR: " << it;
+  friend std::ostream& operator << <>(std::ostream& os, const ItR& it);
+  
+ private:
+  ItR(const RadixTrie<Key,Value>* rt_p, 
+      const typename RadixTrie<Key,Value>::NodePtr root_p, 
+      typename RadixTrie<Key,Value>::NodePtr node_p) : 
       rt_p_{rt_p}, 
       sub_root_p_{(root_p == nullptr)? rt_p->root_p_.get(): root_p}, 
       node_p_{node_p} {}
-
-    // all nodes from root subtree to the next node we intend to visit
-    const RadixTrie*     rt_p_;
-    const NodePtr        sub_root_p_; 
-    NodePtr              node_p_; 
-  };
+  
+  // all nodes from root subtree to the next node we intend to visit
+  const RadixTrie<Key,Value>*                   rt_p_;
+  const typename RadixTrie<Key,Value>::NodePtr  sub_root_p_; 
+  typename RadixTrie<Key,Value>::NodePtr        node_p_; 
 };
 
 //-----------------------------------------------------------------------------

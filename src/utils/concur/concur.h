@@ -89,11 +89,11 @@ class Concur {
   }
  private:
   template <typename F, typename Ret>
-  inline void SetValue(F& f, std::promise<Ret> &pro) {
+  inline void SetValue(F& f, std::promise<Ret> &pro) const {
     pro.set_value(f(t_));
   }
   template <typename F>
-  inline void SetValue(F& f, std::promise<void> &pro) {
+  inline void SetValue(F& f, std::promise<void> &pro) const {
     f(t_);
     pro.set_value();
   }

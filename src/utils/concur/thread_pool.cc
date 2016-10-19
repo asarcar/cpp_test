@@ -75,7 +75,7 @@ ThreadPool<F>::~ThreadPool() {
   CB_QUASH_N_WAIT(task_mgr_);
 
   // Terminate Task Threads by sending a null functor
-  for (int i=0; i<task_ths_.size(); ++i) 
+  for (int i=0; i<(int)task_ths_.size(); ++i) 
     task_q_.Push(F{});
   
   for (auto &t:task_ths_) {

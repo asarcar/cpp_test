@@ -92,7 +92,8 @@ class IPv4Prefix {
   int   len_;
   static inline uint32_t GetMask(int runlen) {
     DCHECK(runlen <= IPv4::MAX_LEN);
-    return 0xFFFFFFFF << (IPv4::MAX_LEN - runlen);
+    // For some bizarre reason: 0xFFFFFFFF << 32 is not returning 0
+    return ((runlen == 0) ? 0x0 : (0xFFFFFFFF << (IPv4::MAX_LEN - runlen)));
   }
 };
 

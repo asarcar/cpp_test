@@ -282,7 +282,7 @@ void SpinLockTester::LockDowngradeTest() {
 template <typename Lock>
 Clock::TimeDuration SpinLockTester::LockBenchmarkExclusiveHelper(Lock &m) {
   auto fn = [&m]() {
-    for (int i=0; i<kNumLockUnlock; ++i) {
+    for (int i=0; i<(int)kNumLockUnlock; ++i) {
       LockGuard<Lock> lckg(m);
     }
   };
@@ -298,7 +298,7 @@ Clock::TimeDuration SpinLockTester::LockBenchmarkExclusiveHelper(Lock &m) {
 template <typename Lock>
 Clock::TimeDuration SpinLockTester::LockBenchmarkShareHelper(Lock &m) {
   auto fn = [&m]() {
-    for (int i=0; i<kNumLockUnlock; ++i) {
+    for (int i=0; i<(int)kNumLockUnlock; ++i) {
       LockGuard<Lock> lckg(m, LockMode::SHARE_LOCK);
     }
   };

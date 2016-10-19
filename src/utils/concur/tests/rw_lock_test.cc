@@ -91,7 +91,6 @@ int main(int argc, char *argv[]) {
 
   // every FLAGS_num_reads_per_write + 1 will have 1 write: rest are reads
   int num_rd_wr_quanta = FLAGS_num_reads_per_write + 1;
-  int cnt = 0;
 
   for (int i=0; i<FLAGS_num_threads; ++i) {
     LockMode mode{LockMode::SHARE_LOCK};

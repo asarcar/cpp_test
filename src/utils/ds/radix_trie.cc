@@ -42,14 +42,14 @@ RadixTrie<Key,Value>::Node::Node(Key k, KeyValueUPtr kv,
 }
 
 template <typename Key, typename Value>
-typename RadixTrie<Key,Value>::Iterator
+ItR<Key,Value>
 RadixTrie<Key,Value>::Begin(NodePtr root_p) const { 
   root_p = (root_p == nullptr) ? root_p_.get() : root_p;
-  return Iterator{this, root_p, GetFirst(root_p)}; 
+  return ItR<Key,Value>{this, root_p, GetFirst(root_p)}; 
 }
 
 template <typename Key, typename Value>
-typename RadixTrie<Key,Value>::Iterator
+ItR<Key,Value>
 RadixTrie<Key,Value>::Find(const Key& key) const { 
   NodePtr lm_node_p = LongestPrefixMatchNode(key);
   if ((lm_node_p == nullptr) ||
@@ -57,23 +57,24 @@ RadixTrie<Key,Value>::Find(const Key& key) const {
       (lm_node_p->keyvalue_p->first != key))
     return End();
   
-  return Iterator{this, nullptr, lm_node_p};
+  return ItR<Key,Value>{this, nullptr, lm_node_p};
 }
 
 template <typename Key, typename Value>
-typename RadixTrie<Key,Value>::Iterator
+ItR<Key,Value>
 RadixTrie<Key,Value>::LongestPrefixMatch(const Key& key) const {
   // Traverse up from the longest match node to the first and nearest
   // ancestor that has value associated
-  NodePtr lm_node_p = LongestPrefixMatchNode(key);  
-  while ((lm_node_p != nullptr) && (lm_node_p->keyvalue_p == nullptr))
+  NodePtr lm_node_p = LongestPrefixMatchNode(key);
+  while ((lm_node_p != nullptr) && (lm_node_p->keyvalue_p == nullptr)) {
     lm_node_p = lm_node_p->parent_p;
-  return Iterator{this, nullptr, lm_node_p};
+  }
+  return ItR<Key,Value>{this, nullptr, lm_node_p};
 }
 
 template <typename Key, typename Value>
-typename RadixTrie<Key,Value>::Iterator
-RadixTrie<Key,Value>::Erase(const Iterator it) {
+ItR<Key,Value>
+RadixTrie<Key,Value>::Erase(const ItR<Key,Value> it) {
   if (it == End())
     return it;
   NodePtr node_p = it.node_p_;
@@ -97,7 +98,7 @@ RadixTrie<Key,Value>::Erase(const Iterator it) {
   //    child exists: we will fall through to case (c).
   if ((lchild_p != nullptr) && (rchild_p != nullptr)) {
     next_p = GetNext(root_p_.get(), node_p);
-    return Iterator{this, nullptr, next_p};
+    return ItR<Key,Value>{this, nullptr, next_p};
   }
 
   // b. Node is leaf. Discard leaf node. 
@@ -107,7 +108,7 @@ RadixTrie<Key,Value>::Erase(const Iterator it) {
       // frees node_p and unreleased descendants of node_p
       root_p_.reset(nullptr); 
       --node_size_;
-      return Iterator{this, nullptr, next_p};
+      return ItR<Key,Value>{this, nullptr, next_p};
     }
 
     child_p = parent_p->children_p.at(Node::LEFT_CHILD).get();
@@ -140,7 +141,7 @@ RadixTrie<Key,Value>::Erase(const Iterator it) {
 
   // b. fallthrough
   if (node_p->keyvalue_p != nullptr)
-    return Iterator{this, nullptr, next_p};
+    return ItR<Key,Value>{this, nullptr, next_p};
 
   // c. Node intermediate with no value and only one child.
   //    Discard Node and "Promote" its single child to its place.
@@ -157,7 +158,7 @@ RadixTrie<Key,Value>::Erase(const Iterator it) {
     root_p_.reset(child_p); 
     --node_size_;
     child_p->parent_p = nullptr;
-    return Iterator{this, nullptr, next_p};
+    return ItR<Key,Value>{this, nullptr, next_p};
   }
 
   // parent_p exists: Link the child to node's parent in the same branch path
@@ -168,7 +169,7 @@ RadixTrie<Key,Value>::Erase(const Iterator it) {
   parent_p->children_p.at(idx).reset(child_p); 
   --node_size_;
 
-  return Iterator{this, nullptr, next_p};
+  return ItR<Key,Value>{this, nullptr, next_p};
 }
 
 template <typename Key, typename Value>
@@ -225,7 +226,7 @@ RadixTrie<Key,Value>::LongestPrefixMatchNode(const Key& key,
     // Continue exploration if possible
 
     int child_idx = k[len_common];
-    DCHECK(child_idx < Node::NUM_CHILDREN);
+    DCHECK(child_idx < (int)Node::NUM_CHILDREN);
     NodePtr child_p{node_p->children_p.at(child_idx).get()};
 
     // New key is (len_common, len_key] substring of previous key
@@ -331,7 +332,7 @@ RadixTrie<Key,Value>::Insert(KeyValue kv) {
     root_p = new Node{Key{kv.first}, KeyValueUPtr{new KeyValue{std::move(kv)}}};
     root_p_.reset(root_p);
     ++node_size_; ++value_size_;
-    return InsertRetType{Iterator{this, root_p, root_p}, true};
+    return InsertRetType{ItR<Key,Value>{this, root_p, root_p}, true};
   }
 
   // Longest Match Node Found cases from here on
@@ -344,7 +345,7 @@ RadixTrie<Key,Value>::Insert(KeyValue kv) {
       ++value_size_;
       new_insert = true;
     }
-    return InsertRetType{Iterator{this, root_p, lm_node_p}, new_insert};
+    return InsertRetType{ItR<Key,Value>{this, root_p, lm_node_p}, new_insert};
   }
 
   // d. New Leaf Node. 
@@ -357,7 +358,7 @@ RadixTrie<Key,Value>::Insert(KeyValue kv) {
                KeyValueUPtr{new KeyValue{std::move(kv)}}, lm_node_p};
   ++node_size_; ++value_size_;
   lm_node_p->children_p.at(child_idx).reset(child_p);
-  return InsertRetType{Iterator{this, root_p, child_p}, true};
+  return InsertRetType{ItR<Key,Value>{this, root_p, child_p}, true};
 }
 
 
@@ -495,7 +496,7 @@ RadixTrie<Key,Value>::SetUpTreeBranch(
     int        lm_key_len, 
     int        lp_key_len) {
   DCHECK(first_mm_node_p != nullptr);
-  DCHECK(lp_key_len - lm_key_len < first_mm_node_p->key.size());
+  DCHECK(lp_key_len - lm_key_len < (int)first_mm_node_p->key.size());
   int key_len = kv.first.size();
 
   // Case a.1: SplitNode with two Children Branch
@@ -506,7 +507,7 @@ RadixTrie<Key,Value>::SetUpTreeBranch(
     ++node_size_; ++value_size_;
     
     SplitNode(first_mm_node_p, lp_key_len - lm_key_len, sibling_p);
-    return InsertRetType{Iterator{this, root_p_.get(), sibling_p}, true};
+    return InsertRetType{ItR<Key,Value>{this, root_p_.get(), sibling_p}, true};
   }
 
   // Case a.2 SplitNode with one Child Branch
@@ -514,7 +515,7 @@ RadixTrie<Key,Value>::SetUpTreeBranch(
   SplitNode(first_mm_node_p, lp_key_len - lm_key_len, nullptr);
   first_mm_node_p->keyvalue_p.reset(new KeyValue{std::move(kv)});
   ++value_size_;
-  return InsertRetType{Iterator{this, root_p_.get(), first_mm_node_p}, true};
+  return InsertRetType{ItR<Key,Value>{this, root_p_.get(), first_mm_node_p}, true};
 }
 
 
@@ -525,13 +526,23 @@ std::ostream& operator << (std::ostream& os,
   os << "#nodes " << rt.NSize() << ": #values " << rt.Size() << std::endl;
   os << "---------------------------" << std::endl;
 
-  typename RadixTrie<Key,Value>::Iterator it = rt.Begin();
-  typename RadixTrie<Key,Value>::Iterator itend = rt.End();
+  ItR<Key,Value> it = rt.Begin();
+  ItR<Key,Value> itend = rt.End();
 
   for(; it != itend; ++it)
     os << "<" << it->first << "," << it->second << ">" << std::endl;
   
   os << "===========================" << std::endl;
+
+  return os;
+}
+
+template <typename Key, typename Value>
+std::ostream& operator << (std::ostream& os, 
+                           const ItR<Key,Value>& it) {
+  os << "RadixTriePtr=" << hex << it.rt_p_
+     << ": SubRootPtr=" << it.sub_root_p_
+     << ": NodePtr=" << it.node_p_;
 
   return os;
 }
@@ -544,6 +555,12 @@ template std::ostream& operator << (std::ostream &os,
 template class RadixTrie<StringPrefix, void*>;
 template std::ostream& operator << (std::ostream &os,
                                     const RadixTrie<StringPrefix, void*>&);
+template class ItR<IPv4Prefix, void*>;
+template std::ostream& operator << (std::ostream &os,
+                                    const ItR<IPv4Prefix, void*>&);
+template class ItR<StringPrefix, void*>;
+template std::ostream& operator << (std::ostream &os,
+                                    const ItR<StringPrefix, void*>&);
 
 // Test Instantiation for string as value
 template class RadixTrie<IPv4Prefix, string>;
@@ -552,5 +569,11 @@ template std::ostream& operator << (std::ostream &os,
 template class RadixTrie<StringPrefix, string>;
 template std::ostream& operator << (std::ostream &os,
                                     const RadixTrie<StringPrefix, string>&);
+template class ItR<IPv4Prefix, string>;
+template std::ostream& operator << (std::ostream &os,
+                                    const ItR<IPv4Prefix, string>&);
+template class ItR<StringPrefix, string>;
+template std::ostream& operator << (std::ostream &os,
+                                    const ItR<StringPrefix, string>&);
 //-----------------------------------------------------------------------------
 } } } // namespace asarcar { namespace utils { namespace ds {

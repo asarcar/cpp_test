@@ -57,6 +57,9 @@ class TreapCIter;
 template <typename K, typename V>
 std::ostream& operator << (std::ostream& os, const Treap<K,V>& t);
 
+template <typename K, typename V>
+std::ostream& operator << (std::ostream& os, const TreapCIter<K,V>& it);
+
 // Assumed following "Concepts" defined.
 // 1. K ordering: Ki < Kj, Ki > Kj, and Ki == Kj
 // 2. K/V Initialization and Creation: Copy and Assign rval ctors 
@@ -135,7 +138,8 @@ class Treap {
     // suboptimal implementation: many cases the deleted key and next element
     // may lie in the same subtree in which can one could avoid one log(n) 
     // traversal. In this case we are traversing log(n) twice.
-    return ModPr{ItC{this, _root, getNext(_root, key)}, Delete(key)};
+    bool del_result = Delete(key);
+    return ModPr{ItC{this, _root, getNext(_root, key)}, del_result};
   }
 
   // Delete: removes element & returns bool (TRUE if element was removed when it exists)
@@ -470,6 +474,10 @@ class TreapCIter {
   inline NodePtr operator->(void) {
     return this->_cur;
   }
+  // helper function to allow chained cout cmds: example
+  // cout << "TreapCIter: " << endl << t << endl << "---------" << endl;
+  friend std::ostream& operator << <>(std::ostream& os, const TreapCIter<K,V>& t);
+  
  private:
   TreapPtr    _trp;
   NodePtr     _root; // Subtree used to iterate
@@ -505,6 +513,18 @@ std::ostream& operator << (std::ostream& os, const Treap<K,V>& t) {
   
   return os;
 }
+
+// TreapCIter Output
+// helper function to allow chained cout cmds: example
+// cout << "Treap: " << endl << t << endl << "---------" << endl;
+template <typename K, typename V>
+std::ostream& operator << (std::ostream& os, const TreapCIter<K,V>& it) {
+  os << std::hex << "TreapPtr=" << it._trp
+     << ": Root=" << it._root << ": CurPtr=" << it._cur
+     << ": KeyVal<" << it._kvp.first << "," << it._kvp.second << ">";
+  return os;
+}
+
 
 //-----------------------------------------------------------------------------
 } } // namespace asarcar { namespace utils {

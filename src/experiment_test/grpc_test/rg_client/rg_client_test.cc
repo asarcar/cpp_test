@@ -57,6 +57,7 @@
 // Google Headers
 #include <glog/logging.h>   
 #include <grpc/grpc.h>
+#include <grpc/support/log.h>
 #include <grpc++/channel.h>
 #include <grpc++/client_context.h>
 #include <grpc++/create_channel.h>
@@ -563,7 +564,7 @@ int main(int argc, char** argv) {
   Init::InitEnv(&argc, &argv);
 
   RouteGuideClient guide(
-      grpc::CreateChannel("localhost:50051", grpc::InsecureCredentials()),
+      grpc::CreateChannel("localhost:50051", grpc::InsecureChannelCredentials()),
       FLAGS_db_path);
 
   DLOG(INFO) << argv[0] << " Executing Test";

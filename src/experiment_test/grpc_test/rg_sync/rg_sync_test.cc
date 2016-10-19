@@ -452,7 +452,7 @@ int main(int argc, char** argv) {
   // Run Client
   std::thread client([]() {
       RouteGuideClient guide(
-          grpc::CreateChannel("localhost:50051", grpc::InsecureCredentials()));
+          grpc::CreateChannel("localhost:50051", grpc::InsecureChannelCredentials()));
       
       DLOG(INFO) << "-------------- GetFeature --------------";
       guide.TestGetFeature();
